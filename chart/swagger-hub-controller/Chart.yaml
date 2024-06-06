@@ -1,0 +1,14 @@
+apiVersion: v2
+appVersion: v0.0.0
+description: swagger-hub controller
+home: https://github.com/DoodleScheduling/swagger-hub-controller
+maintainers:
+- name: devops
+  email: devops@doodle.com
+keywords:
+- swagger-hub-controller
+- swagger-ui
+name: swagger-hub-controller
+sources:
+- https://github.com/DoodleScheduling/swagger-hub-controller
+version: 0.0.0

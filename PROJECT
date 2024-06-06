@@ -1,0 +1,25 @@
+domain: doodle.com
+layout:
+- go.kubebuilder.io/v3
+projectName: swagger-hub-controller
+repo: github.com/doodlescheduling/swagger-hub-controller
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: doodle.com
+  group: swagger.infra.doodle.com
+  kind: SwaggerHub
+  path: github.com/doodlescheduling/swagger-hub-controller/api/v1beta1
+  version: v1beta1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: doodle.com
+  group: swagger.infra.doodle.com
+  kind: SwaggerDefinition
+  path: github.com/doodlescheduling/swagger-hub-controller/api/v1beta1
+  version: v1beta1
+version: "3"

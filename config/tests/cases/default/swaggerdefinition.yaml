@@ -1,0 +1,13 @@
+apiVersion: swagger.infra.doodle.com/v1beta1
+kind: SwaggerDefinition
+metadata:
+  name: test-a
+spec:
+  url: https://microservice-a/openapispecs/v1
+---
+apiVersion: swagger.infra.doodle.com/v1beta1
+kind: SwaggerDefinition
+metadata:
+  name: test-b
+spec:
+  url: https://microservice-b/swagger-specs
