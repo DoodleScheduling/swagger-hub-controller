@@ -139,15 +139,6 @@ type SwaggerHubStatus struct {
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
-	// DeploymentName is the currently rolled out swagger-ui
-	DeploymentName string `json:"deploymentName,omitempty"`
-
-	// DeploymentHash is used to determine wether a new rollout is required
-	DeploymentHash string `json:"deploymentHash,omitempty"`
-
-	// DeploymentGeneration is used to verify if the deployment did not change by other means
-	DeploymentGeneration int64 `json:"deploymentHash,omitempty"`
-
 	// ObservedGeneration is the last generation reconciled by the controller
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
