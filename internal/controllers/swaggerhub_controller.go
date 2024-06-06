@@ -374,7 +374,8 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		}
 	}
 
-	return hub, ctrl.Result{}, err
+	hub = infrav1beta1.SwaggerHubReady(hub, metav1.ConditionTrue, "ReconciliationSuccessful", fmt.Sprintf("deployment/%s created", template.Name))
+	return hub, ctrl.Result{}, nil
 }
 
 func (r *SwaggerHubReconciler) extendhubWithDefinitions(ctx context.Context, hub infrav1beta1.SwaggerHub, logger logr.Logger) (infrav1beta1.SwaggerHub, []infrav1beta1.SwaggerDefinition, error) {
