@@ -17,10 +17,11 @@ limitations under the License.
 package controllers
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -415,6 +416,13 @@ func (r *SwaggerHubReconciler) extendhubWithDefinitions(ctx context.Context, hub
 		definitions.Items = append(definitions.Items, namespacedDefinitions.Items...)
 	}
 
+	slices.SortFunc(definitions.Items, func(a, b infrav1beta1.SwaggerDefinition) int {
+		return cmp.Or(
+			cmp.Compare(a.Name, b.Name),
+			cmp.Compare(a.Namespace, b.Namespace),
+		)
+	})
+
 	for _, client := range definitions.Items {
 		hub.Status.SubResourceCatalog = append(hub.Status.SubResourceCatalog, infrav1beta1.ResourceReference{
 			Kind:       client.Kind,
@@ -422,10 +430,6 @@ func (r *SwaggerHubReconciler) extendhubWithDefinitions(ctx context.Context, hub
 			APIVersion: client.APIVersion,
 		})
 	}
-
-	sort.Slice(definitions.Items, func(i, j int) bool {
-		return definitions.Items[i].Name < definitions.Items[j].Name && definitions.Items[i].Namespace < definitions.Items[j].Namespace
-	})
 
 	return hub, definitions.Items, nil
 }
