@@ -183,8 +183,8 @@ var _ = Describe("SwagggerHub controller", func() {
 
 	When("it reconciles a hub with spec definitions", func() {
 		hubName := fmt.Sprintf("hub-%s", randStringRunes(5))
-		spec1Name := fmt.Sprintf("spec-%s", randStringRunes(5))
-		spec2Name := fmt.Sprintf("spec-%s", randStringRunes(5))
+		spec1Name := fmt.Sprintf("spec-b-%s", randStringRunes(5))
+		spec2Name := fmt.Sprintf("spec-a-%s", randStringRunes(5))
 		var hub *v1beta1.SwaggerHub
 		var spec1 *v1beta1.SwaggerDefinition
 		var spec2 *v1beta1.SwaggerDefinition
@@ -252,12 +252,12 @@ var _ = Describe("SwagggerHub controller", func() {
 			Expect(reconciledInstance.Status.SubResourceCatalog).Should(Equal([]v1beta1.ResourceReference{
 				{
 					Kind:       "SwaggerDefinition",
-					Name:       spec1Name,
+					Name:       spec2Name,
 					APIVersion: "swagger.infra.doodle.com/v1beta1",
 				},
 				{
 					Kind:       "SwaggerDefinition",
-					Name:       spec2Name,
+					Name:       spec1Name,
 					APIVersion: "swagger.infra.doodle.com/v1beta1",
 				},
 			}))
@@ -304,7 +304,7 @@ var _ = Describe("SwagggerHub controller", func() {
 			Expect(reconciledInstance.Spec.Template.Spec.Containers[0].Env).To(Equal([]corev1.EnvVar{
 				{
 					Name:  "API_URLS",
-					Value: fmt.Sprintf(`[{"name":"%s:default","url":"https://spec-url-1"},{"name":"%s:default","url":"https://spec-url-2"}]`, spec1Name, spec2Name),
+					Value: fmt.Sprintf(`[{"name":"%s:default","url":"https://spec-url-2"},{"name":"%s:default","url":"https://spec-url-1"}]`, spec2Name, spec1Name),
 				},
 			}))
 			Expect(reconciledInstance.OwnerReferences[0].Name).Should(Equal(hubName))
