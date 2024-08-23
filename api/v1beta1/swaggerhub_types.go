@@ -52,7 +52,6 @@ func init() {
 
 // SwaggerHubSpec defines the desired state of SwaggerHub
 type SwaggerHubSpec struct {
-	// +required
 	DeploymentTemplate *DeploymentTemplate `json:"deploymentTemplate,omitempty"`
 
 	// Suspend reconciliation

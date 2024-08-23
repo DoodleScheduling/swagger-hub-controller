@@ -37,25 +37,6 @@ rules:
   - swagger.infra.doodle.com
   resources:
   - swaggerdefinitions
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - swagger.infra.doodle.com
-  resources:
-  - swaggerdefinitions/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - swagger.infra.doodle.com
-  resources:
   - swaggerhubs
   verbs:
   - create
@@ -68,6 +49,7 @@ rules:
 - apiGroups:
   - swagger.infra.doodle.com
   resources:
+  - swaggerdefinitions/status
   - swaggerhubs/status
   verbs:
   - get

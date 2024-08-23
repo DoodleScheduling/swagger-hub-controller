@@ -3,6 +3,7 @@
 [![release](https://img.shields.io/github/release/DoodleScheduling/swagger-hub-controller/all.svg)](https://github.com/DoodleScheduling/swagger-hub-controller/releases)
 [![release](https://github.com/doodlescheduling/swagger-hub-controller/actions/workflows/release.yaml/badge.svg)](https://github.com/doodlescheduling/swagger-hub-controller/actions/workflows/release.yaml)
 [![report](https://goreportcard.com/badge/github.com/DoodleScheduling/swagger-hub-controller)](https://goreportcard.com/report/github.com/DoodleScheduling/swagger-hub-controller)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/DoodleScheduling/swagger-hub-controller/badge)](https://api.securityscorecards.dev/projects/github.com/DoodleScheduling/swagger-hub-controller)
 [![Coverage Status](https://coveralls.io/repos/github/DoodleScheduling/swagger-hub-controller/badge.svg?branch=master)](https://coveralls.io/github/DoodleScheduling/swagger-hub-controller?branch=master)
 [![license](https://img.shields.io/github/license/DoodleScheduling/swagger-hub-controller.svg)](https://github.com/DoodleScheduling/swagger-hub-controller/blob/master/LICENSE)
 

@@ -133,7 +133,7 @@ func (r *SwaggerHubReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	hub, result, err := r.reconcile(ctx, hub, logger)
+	hub, result, err := r.reconcile(ctx, hub)
 	hub.Status.ObservedGeneration = hub.GetGeneration()
 
 	if err != nil {
@@ -157,10 +157,10 @@ type apiURL struct {
 	URL  string `json:"url,omitempty"`
 }
 
-func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.SwaggerHub, logger logr.Logger) (infrav1beta1.SwaggerHub, ctrl.Result, error) {
+func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.SwaggerHub) (infrav1beta1.SwaggerHub, ctrl.Result, error) {
 	hub.Status.SubResourceCatalog = []infrav1beta1.ResourceReference{}
 
-	hub, definitions, err := r.extendhubWithDefinitions(ctx, hub, logger)
+	hub, definitions, err := r.extendhubWithDefinitions(ctx, hub)
 	if err != nil {
 		return hub, ctrl.Result{}, err
 	}
@@ -379,7 +379,7 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	return hub, ctrl.Result{}, nil
 }
 
-func (r *SwaggerHubReconciler) extendhubWithDefinitions(ctx context.Context, hub infrav1beta1.SwaggerHub, logger logr.Logger) (infrav1beta1.SwaggerHub, []infrav1beta1.SwaggerDefinition, error) {
+func (r *SwaggerHubReconciler) extendhubWithDefinitions(ctx context.Context, hub infrav1beta1.SwaggerHub) (infrav1beta1.SwaggerHub, []infrav1beta1.SwaggerDefinition, error) {
 
 	var definitions infrav1beta1.SwaggerDefinitionList
 	definitionSelector, err := metav1.LabelSelectorAsSelector(hub.Spec.DefinitionSelector)
