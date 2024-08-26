@@ -4,21 +4,22 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write # needed to write releases
-  id-token: write # needed for keyless signing
-  packages: write # needed for ghcr access
+permissions: {}
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to write releases
+      id-token: write # needed for keyless signing
+      packages: write # needed for ghcr access
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@5c7944e73c4c2a096b17a9cb74d65b6c2bbafbde # v2.9.1
         with:
           egress-policy: audit
       - name: Checkout code
-        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
         with:
           fetch-depth: 0
       - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
@@ -56,7 +57,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
         with:
           fetch-depth: 0
 
@@ -72,10 +73,10 @@ jobs:
       - name: Package helm charts
         run: |
           packVersion=$(echo "${{ github.ref_name }}" | sed 's/^v//g')
-          helm package chart/swagger-hub-controller -d chart --version=$packVersion --app-version=${{ github.ref_name }}
+          helm package chart/keycloak-controller -d chart --version=$packVersion --app-version=${{ github.ref_name }}
       - name: Publish helm charts to Github Container Registry
         run: |
           repository=$(echo "${{ github.repository_owner }}" | tr [:upper:] [:lower:])
-          helm push ${{ github.workspace }}/chart/swagger-hub-controller-*.tgz oci://ghcr.io/$repository/charts |& tee .digest
+          helm push ${{ github.workspace }}/chart/keycloak-controller-*.tgz oci://ghcr.io/$repository/charts |& tee .digest
           cosign login --username ${GITHUB_ACTOR} --password ${{ secrets.GITHUB_TOKEN }} ghcr.io
-          cosign sign --yes ghcr.io/$repository/charts/swagger-hub-controller@$(cat .digest | awk -F "[, ]+" '/Digest/{print $NF}')
+          cosign sign --yes ghcr.io/$repository/charts/keycloak-controller@$(cat .digest | awk -F "[, ]+" '/Digest/{print $NF}')
