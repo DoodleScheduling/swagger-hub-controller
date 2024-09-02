@@ -18,7 +18,6 @@ A clear and concise description of what you expected to happen.
 
 #### Environment
  - controller version: [e.g. v1.0.0]
- - keycloak version: [e.g. v15.0.0]
  - kubernetes version: [e.g. v1.19.0]
 
 #### Additional context
