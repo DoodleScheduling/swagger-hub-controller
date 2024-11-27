@@ -8294,9 +8294,58 @@ spec:
                     - template
                     type: object
                 type: object
+              frontendURL:
+                type: string
               namespaceSelector:
                 description: NamespaceSelector defines a selector to select namespaces
                   where definitions are looked up
+                properties:
+                  matchExpressions:
+                    description: matchExpressions is a list of label selector requirements.
+                      The requirements are ANDed.
+                    items:
+                      description: |-
+                        A label selector requirement is a selector that contains values, a key, and an operator that
+                        relates the key and values.
+                      properties:
+                        key:
+                          description: key is the label key that the selector applies
+                            to.
+                          type: string
+                        operator:
+                          description: |-
+                            operator represents a key's relationship to a set of values.
+                            Valid operators are In, NotIn, Exists and DoesNotExist.
+                          type: string
+                        values:
+                          description: |-
+                            values is an array of string values. If the operator is In or NotIn,
+                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                            the values array must be empty. This array is replaced during a strategic
+                            merge patch.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: atomic
+                      required:
+                      - key
+                      - operator
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  matchLabels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                      operator is "In", and the values array contains only "value". The requirements are ANDed.
+                    type: object
+                type: object
+                x-kubernetes-map-type: atomic
+              specificationSelector:
+                description: SpecificationSelector defines a selector to select swagger
+                  specifications associated with this hub
                 properties:
                   matchExpressions:
                     description: matchExpressions is a list of label selector requirements.
@@ -8411,8 +8460,9 @@ spec:
                 format: int64
                 type: integer
               subResourceCatalog:
-                description: SubResourceCatalog holds references to all sub resources
-                  including KeycloakClient and KeycloakUser associated with this realm
+                description: SubResourceCatalog holds discovered references to all
+                  sub resources including SwaggerDefinition and SwaggerUnification
+                  associated with this hub
                 items:
                   description: ResourceReference metadata to lookup another resource
                   properties:

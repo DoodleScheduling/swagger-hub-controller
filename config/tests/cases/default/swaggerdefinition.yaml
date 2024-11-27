@@ -3,7 +3,7 @@ kind: SwaggerDefinition
 metadata:
   name: test-a
 spec:
-  url: https://microservice-a/openapispecs/v1
+  url: https://petstore3.swagger.io/api/v3/openapi.json
 ---
 apiVersion: swagger.infra.doodle.com/v1beta1
 kind: SwaggerDefinition

@@ -3,4 +3,5 @@ kind: Kustomization
 resources:
 - bases/swagger.infra.doodle.com_swaggerhubs.yaml
 - bases/swagger.infra.doodle.com_swaggerdefinitions.yaml
+- bases/swagger.infra.doodle.com_swaggerspecifications.yaml
 # +kubebuilder:scaffold:crdkustomizeresource

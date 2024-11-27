@@ -36,6 +36,7 @@ rules:
 - apiGroups:
   - swagger.infra.doodle.com
   resources:
+  - SwaggerSpecifications
   - swaggerdefinitions
   - swaggerhubs
   verbs:
@@ -49,6 +50,7 @@ rules:
 - apiGroups:
   - swagger.infra.doodle.com
   resources:
+  - SwaggerSpecifications/status
   - swaggerdefinitions/status
   - swaggerhubs/status
   verbs:
