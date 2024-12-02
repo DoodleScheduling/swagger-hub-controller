@@ -335,15 +335,15 @@ func fetchDefinition(ctx context.Context, url string, r interface{}) error {
 }
 
 func prefixRefs(v interface{}, name string) {
-	switch v.(type) {
+	switch v := v.(type) {
 	case []interface{}:
-		for _, vv := range v.([]interface{}) {
+		for _, vv := range v {
 			prefixRefs(vv, name)
 		}
 	case map[string]interface{}:
-		for k, vv := range v.(map[string]interface{}) {
+		for k, vv := range v {
 			if k == "$ref" {
-				v.(map[string]interface{})[k] = prefixRef(vv.(string), name)
+				v[k] = prefixRef(vv.(string), name)
 			} else {
 				prefixRefs(vv, name)
 			}
