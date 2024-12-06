@@ -5,3 +5,4 @@ namespace: swagger-system
 resources: 
 - ../../base
 - swaggerdefinition.yaml
+- swaggerspecification.yaml

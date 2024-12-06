@@ -54,12 +54,17 @@ func init() {
 type SwaggerHubSpec struct {
 	DeploymentTemplate *DeploymentTemplate `json:"deploymentTemplate,omitempty"`
 
+	FrontendURL string `json:"frontendURL,omitempty"`
+
 	// Suspend reconciliation
 	// +optional
 	Suspend bool `json:"suspend,omitempty"`
 
 	// DefinitionSelector defines a selector to select swagger definitions associated with this hub
 	DefinitionSelector *metav1.LabelSelector `json:"definitionSelector,omitempty"`
+
+	// SpecificationSelector defines a selector to select swagger specifications associated with this hub
+	SpecificationSelector *metav1.LabelSelector `json:"specificationSelector,omitempty"`
 
 	// NamespaceSelector defines a selector to select namespaces where definitions are looked up
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
@@ -141,7 +146,7 @@ type SwaggerHubStatus struct {
 	// ObservedGeneration is the last generation reconciled by the controller
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// SubResourceCatalog holds references to all sub resources including KeycloakClient and KeycloakUser associated with this realm
+	// SubResourceCatalog holds discovered references to all sub resources including SwaggerDefinition and SwaggerUnification associated with this hub
 	SubResourceCatalog []ResourceReference `json:"subResourceCatalog,omitempty"`
 }
 

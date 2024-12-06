@@ -74,10 +74,10 @@ func (r *SwaggerHubReconciler) SetupWithManager(mgr ctrl.Manager, opts SwaggerHu
 			&infrav1beta1.SwaggerDefinition{},
 			handler.EnqueueRequestsFromMapFunc(r.requestsForChangeBySelector),
 		).
-		/*Watches(
-			&appsv1.Deployment{},
-			handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &infrav1beta1.SwaggerHub{}, handler.OnlyControllerOwner()),
-		).*/
+		Watches(
+			&infrav1beta1.SwaggerSpecification{},
+			handler.EnqueueRequestsFromMapFunc(r.requestsForChangeBySelector),
+		).
 		Watches(
 			&corev1.Service{},
 			handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &infrav1beta1.SwaggerHub{}, handler.OnlyControllerOwner()),
@@ -161,6 +161,11 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	hub.Status.SubResourceCatalog = []infrav1beta1.ResourceReference{}
 
 	hub, definitions, err := r.extendhubWithDefinitions(ctx, hub)
+	if err != nil {
+		return hub, ctrl.Result{}, err
+	}
+
+	hub, specifications, err := r.extendhubWithSpecifications(ctx, hub)
 	if err != nil {
 		return hub, ctrl.Result{}, err
 	}
@@ -280,6 +285,35 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		},
 	}
 
+	frontendURL := "http://localhost"
+	if hub.Spec.FrontendURL != "" {
+		frontendURL = hub.Spec.FrontendURL
+	}
+
+	for _, specification := range specifications {
+		template.Spec.Template.Spec.Volumes = append(template.Spec.Template.Spec.Volumes, corev1.Volume{
+			Name: fmt.Sprintf("swagger-specification-%s", specification.Name),
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: fmt.Sprintf("swagger-specification-%s", specification.Name),
+					},
+				},
+			},
+		})
+
+		containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
+			Name:      fmt.Sprintf("swagger-specification-%s", specification.Name),
+			ReadOnly:  true,
+			MountPath: fmt.Sprintf("/usr/share/nginx/html/specifications/%s", specification.Name),
+		})
+
+		apiURLs = append(apiURLs, apiURL{
+			Name: fmt.Sprintf("%s:%s", specification.Name, specification.Namespace),
+			URL:  fmt.Sprintf("%s/specifications/%s/specification.json", frontendURL, specification.Name),
+		})
+	}
+
 	if len(apiURLs) > 0 {
 		b, err := json.Marshal(apiURLs)
 		if err != nil {
@@ -347,7 +381,6 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 			return hub, ctrl.Result{}, err
 		}
 	} else {
-		//patched, err := merge.MergePatchDeployment(deployment, *template)
 		if err := r.Client.Update(ctx, svcTemplate); err != nil {
 			return hub, ctrl.Result{}, err
 		}
@@ -369,7 +402,6 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		}
 
 	} else {
-		//patched, err := merge.MergePatchDeployment(deployment, *template)
 		if err := r.Client.Update(ctx, template); err != nil {
 			return hub, ctrl.Result{}, err
 		}
@@ -379,8 +411,61 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	return hub, ctrl.Result{}, nil
 }
 
-func (r *SwaggerHubReconciler) extendhubWithDefinitions(ctx context.Context, hub infrav1beta1.SwaggerHub) (infrav1beta1.SwaggerHub, []infrav1beta1.SwaggerDefinition, error) {
+func (r *SwaggerHubReconciler) extendhubWithSpecifications(ctx context.Context, hub infrav1beta1.SwaggerHub) (infrav1beta1.SwaggerHub, []infrav1beta1.SwaggerSpecification, error) {
+	var specifications infrav1beta1.SwaggerSpecificationList
+	definitionSelector, err := metav1.LabelSelectorAsSelector(hub.Spec.SpecificationSelector)
+	if err != nil {
+		return hub, nil, err
+	}
 
+	var namespaces corev1.NamespaceList
+	if hub.Spec.NamespaceSelector == nil {
+		namespaces.Items = append(namespaces.Items, corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: hub.Namespace,
+			},
+		})
+	} else {
+		namespaceSelector, err := metav1.LabelSelectorAsSelector(hub.Spec.NamespaceSelector)
+		if err != nil {
+			return hub, nil, err
+		}
+
+		err = r.Client.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
+		if err != nil {
+			return hub, nil, err
+		}
+	}
+
+	for _, namespace := range namespaces.Items {
+		var namespacedSpecification infrav1beta1.SwaggerSpecificationList
+		err = r.Client.List(ctx, &namespacedSpecification, client.InNamespace(namespace.Name), client.MatchingLabelsSelector{Selector: definitionSelector})
+		if err != nil {
+			return hub, nil, err
+		}
+
+		specifications.Items = append(specifications.Items, namespacedSpecification.Items...)
+	}
+
+	slices.SortFunc(specifications.Items, func(a, b infrav1beta1.SwaggerSpecification) int {
+		return cmp.Or(
+			cmp.Compare(a.Name, b.Name),
+			cmp.Compare(a.Namespace, b.Namespace),
+		)
+	})
+
+	for _, client := range specifications.Items {
+		hub.Status.SubResourceCatalog = append(hub.Status.SubResourceCatalog, infrav1beta1.ResourceReference{
+			Kind:       client.Kind,
+			Name:       client.Name,
+			APIVersion: client.APIVersion,
+		})
+	}
+
+	return hub, specifications.Items, nil
+}
+
+func (r *SwaggerHubReconciler) extendhubWithDefinitions(ctx context.Context, hub infrav1beta1.SwaggerHub) (infrav1beta1.SwaggerHub, []infrav1beta1.SwaggerDefinition, error) {
 	var definitions infrav1beta1.SwaggerDefinitionList
 	definitionSelector, err := metav1.LabelSelectorAsSelector(hub.Spec.DefinitionSelector)
 	if err != nil {

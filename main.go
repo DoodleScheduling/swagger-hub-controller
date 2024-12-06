@@ -119,8 +119,9 @@ func main() {
 		LeaderElectionID:              leaderElectionId,
 		Cache: ctrlcache.Options{
 			ByObject: map[ctrlclient.Object]ctrlcache.ByObject{
-				&infrav1beta1.SwaggerHub{}:        {Label: watchSelector},
-				&infrav1beta1.SwaggerDefinition{}: {Label: watchSelector},
+				&infrav1beta1.SwaggerHub{}:           {Label: watchSelector},
+				&infrav1beta1.SwaggerDefinition{}:    {Label: watchSelector},
+				&infrav1beta1.SwaggerSpecification{}: {Label: watchSelector},
 			},
 		},
 	}
@@ -162,6 +163,20 @@ func main() {
 		MaxConcurrentReconciles: concurrent,
 	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SwaggerHub")
+		os.Exit(1)
+	}
+
+	specificationReconciler := &controllers.SwaggerSpecificationReconciler{
+		Client:   mgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("SwaggerSpecification"),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("SwaggerSpecification"),
+	}
+
+	if err = specificationReconciler.SetupWithManager(mgr, controllers.SwaggerSpecificationReconcilerOptions{
+		MaxConcurrentReconciles: concurrent,
+	}); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SwaggerSpecification")
 		os.Exit(1)
 	}
 
