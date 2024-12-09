@@ -47,14 +47,6 @@ import (
 	infrav1beta1 "github.com/DoodleScheduling/swagger-hub-controller/api/v1beta1"
 )
 
-// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=SwaggerSpecifications,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=SwaggerSpecifications/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerdefinitions,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerdefinitions/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;update;patch;delete;watch;list
-// +kubebuilder:rbac:groups="",resources=services,verbs=get;update;patch;delete;watch;list
-// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
-
 // SwaggerSpecification reconciles a SwaggerSpecification object
 type SwaggerSpecificationReconciler struct {
 	client.Client

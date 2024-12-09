@@ -47,7 +47,7 @@ import (
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerhubs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerhubs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerdefinitions,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerdefinitions/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerspecifications,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
