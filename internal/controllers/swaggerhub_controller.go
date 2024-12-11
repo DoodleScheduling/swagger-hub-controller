@@ -226,13 +226,12 @@ func (r *SwaggerHubReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		logger.Error(err, "reconcile error occurred")
 		hub = infrav1beta1.SwaggerHubReady(hub, metav1.ConditionFalse, "ReconciliationFailed", err.Error())
 		r.Recorder.Event(&hub, "Normal", "error", err.Error())
-		result.Requeue = true
 	}
 
 	// Update status after reconciliation.
 	if err := r.patchStatus(ctx, &hub); err != nil {
 		logger.Error(err, "unable to update status after reconciliation")
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{}, err
 	}
 
 	return result, err
