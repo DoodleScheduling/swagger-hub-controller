@@ -18,6 +18,7 @@ rules:
   resources:
   - swaggerhubs
   - swaggerdefinitions
+  - swaggerspecifications
   verbs:
   - create
   - delete
@@ -30,7 +31,6 @@ rules:
   - "swagger.infra.doodle.com"
   resources:
   - swaggerhubs/status
-  - swaggerdefinitions/status
   verbs:
   - get
 {{- end }}

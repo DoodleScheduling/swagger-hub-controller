@@ -17,6 +17,7 @@ rules:
   resources:
   - swaggerhubs
   - swaggerdefinitions
+  - swaggerspecifications
   verbs:
   - get
   - list
@@ -25,7 +26,6 @@ rules:
   - "swagger.infra.doodle.com"
   resources:
   - swaggerhubs/status
-  - swaggerdefinitions/status
   verbs:
   - get
 {{- end }}

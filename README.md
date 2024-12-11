@@ -31,7 +31,7 @@ By using match labels or expressions it can be configured what definitions shoul
 
 Similar to the `definitionSelector` it is possible to match definitions cross namespace by using `spec.namespaceSelector`. 
 By default a `SwaggerHub` only looks up definitions from the same namespace as the hub but with a namespace selector this behaviour can be changed.
-Using `matchLabels: {}` will lookup definitions across all namespaces.
+Using `namespaceSelector.matchLabels: {}` will lookup definitions across all namespaces.
 
 ```yaml
 apiVersion: swagger.infra.doodle.com/v1beta1
@@ -95,7 +95,7 @@ The reconciliation can be paused by setting `spec.suspend` to `true`:
 kubectl patch swaggerhub default-p '{"spec":{"suspend": true}}' --type=merge
 ```
 
-## Observe KeycloakRealm reconciliation
+## Observe SwaggerHub reconciliation
 
 A `SwaggerHub` will have all discovered resources populated in `.status.subResourceCatalog`.
 Also there are two conditions which are useful for observing `Ready` and a temporary one named `Reconciling`
