@@ -48,6 +48,7 @@ import (
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerhubs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerdefinitions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerspecifications,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=namespaces,verbs=get;watch;list
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
@@ -150,6 +151,19 @@ func (r *SwaggerHubReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	return result, err
+}
+
+func isOwner(owner, owned metav1.Object) bool {
+	runtimeObj, ok := (owner).(runtime.Object)
+	if !ok {
+		return false
+	}
+	for _, ownerRef := range owned.GetOwnerReferences() {
+		if ownerRef.Name == owner.GetName() && ownerRef.UID == owner.GetUID() && ownerRef.Kind == runtimeObj.GetObjectKind().GroupVersionKind().Kind {
+			return true
+		}
+	}
+	return false
 }
 
 type apiURL struct {
@@ -381,6 +395,10 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 			return hub, ctrl.Result{}, err
 		}
 	} else {
+		if !isOwner(&hub, &svc) {
+			return hub, ctrl.Result{}, fmt.Errorf("can not take ownership of existing service: %s", svc.Name)
+		}
+
 		if err := r.Client.Update(ctx, svcTemplate); err != nil {
 			return hub, ctrl.Result{}, err
 		}
@@ -400,8 +418,11 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		if err := r.Client.Create(ctx, template); err != nil {
 			return hub, ctrl.Result{}, err
 		}
-
 	} else {
+		if !isOwner(&hub, &deployment) {
+			return hub, ctrl.Result{}, fmt.Errorf("can not take ownership of existing deployment: %s", deployment.Name)
+		}
+
 		if err := r.Client.Update(ctx, template); err != nil {
 			return hub, ctrl.Result{}, err
 		}
