@@ -73,11 +73,11 @@ func (r *SwaggerHubReconciler) SetupWithManager(mgr ctrl.Manager, opts SwaggerHu
 		)).
 		Watches(
 			&infrav1beta1.SwaggerDefinition{},
-			handler.EnqueueRequestsFromMapFunc(r.requestsForChangeBySelector),
+			handler.EnqueueRequestsFromMapFunc(r.requestsForChangeByDefinitionSelector),
 		).
 		Watches(
 			&infrav1beta1.SwaggerSpecification{},
-			handler.EnqueueRequestsFromMapFunc(r.requestsForChangeBySelector),
+			handler.EnqueueRequestsFromMapFunc(r.requestsForChangeBySpecificationSelector),
 		).
 		Watches(
 			&corev1.Service{},
@@ -87,15 +87,100 @@ func (r *SwaggerHubReconciler) SetupWithManager(mgr ctrl.Manager, opts SwaggerHu
 		Complete(r)
 }
 
-func (r *SwaggerHubReconciler) requestsForChangeBySelector(ctx context.Context, o client.Object) []reconcile.Request {
+func (r *SwaggerHubReconciler) requestsForChangeByDefinitionSelector(ctx context.Context, o client.Object) []reconcile.Request {
 	var list infrav1beta1.SwaggerHubList
-	if err := r.List(ctx, &list, client.InNamespace(o.GetNamespace())); err != nil {
+	if err := r.List(ctx, &list); err != nil {
 		return nil
 	}
 
 	var reqs []reconcile.Request
 	for _, hub := range list.Items {
+		var namespaces corev1.NamespaceList
+		if hub.Spec.NamespaceSelector == nil {
+			namespaces.Items = append(namespaces.Items, corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: hub.Namespace,
+				},
+			})
+		} else {
+			namespaceSelector, err := metav1.LabelSelectorAsSelector(hub.Spec.NamespaceSelector)
+			if err != nil {
+				return nil
+			}
+
+			err = r.Client.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
+			if err != nil {
+				return nil
+			}
+		}
+
+		var hasReferencedHubNamespace bool
+		for _, ns := range namespaces.Items {
+			if ns.Name == o.GetNamespace() {
+				hasReferencedHubNamespace = true
+				break
+			}
+		}
+
+		if !hasReferencedHubNamespace {
+			continue
+		}
+
 		labelSel, err := metav1.LabelSelectorAsSelector(hub.Spec.DefinitionSelector)
+		if err != nil {
+			r.Log.Error(err, "can not select resourceSelector selectors")
+			continue
+		}
+
+		if labelSel.Matches(labels.Set(o.GetLabels())) {
+			r.Log.V(1).Info("referenced resource from a SwaggerHub changed detected", "namespace", hub.GetNamespace(), "hub-name", hub.GetName())
+			reqs = append(reqs, reconcile.Request{NamespacedName: objectKey(&hub)})
+		}
+	}
+
+	return reqs
+}
+
+func (r *SwaggerHubReconciler) requestsForChangeBySpecificationSelector(ctx context.Context, o client.Object) []reconcile.Request {
+	var list infrav1beta1.SwaggerHubList
+	if err := r.List(ctx, &list); err != nil {
+		return nil
+	}
+
+	var reqs []reconcile.Request
+	for _, hub := range list.Items {
+		var namespaces corev1.NamespaceList
+		if hub.Spec.NamespaceSelector == nil {
+			namespaces.Items = append(namespaces.Items, corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: hub.Namespace,
+				},
+			})
+		} else {
+			namespaceSelector, err := metav1.LabelSelectorAsSelector(hub.Spec.NamespaceSelector)
+			if err != nil {
+				return nil
+			}
+
+			err = r.Client.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
+			if err != nil {
+				return nil
+			}
+		}
+
+		var hasReferencedHubNamespace bool
+		for _, ns := range namespaces.Items {
+			if ns.Name == o.GetNamespace() {
+				hasReferencedHubNamespace = true
+				break
+			}
+		}
+
+		if !hasReferencedHubNamespace {
+			continue
+		}
+
+		labelSel, err := metav1.LabelSelectorAsSelector(hub.Spec.SpecificationSelector)
 		if err != nil {
 			r.Log.Error(err, "can not select resourceSelector selectors")
 			continue
@@ -475,12 +560,18 @@ func (r *SwaggerHubReconciler) extendhubWithSpecifications(ctx context.Context, 
 		)
 	})
 
-	for _, client := range specifications.Items {
-		hub.Status.SubResourceCatalog = append(hub.Status.SubResourceCatalog, infrav1beta1.ResourceReference{
-			Kind:       client.Kind,
-			Name:       client.Name,
-			APIVersion: client.APIVersion,
-		})
+	for _, specification := range specifications.Items {
+		ref := infrav1beta1.ResourceReference{
+			Kind:       specification.Kind,
+			Name:       specification.Name,
+			APIVersion: specification.APIVersion,
+		}
+
+		if specification.Namespace != hub.Namespace {
+			ref.Namespace = specification.Namespace
+		}
+
+		hub.Status.SubResourceCatalog = append(hub.Status.SubResourceCatalog, ref)
 	}
 
 	return hub, specifications.Items, nil
@@ -529,12 +620,18 @@ func (r *SwaggerHubReconciler) extendhubWithDefinitions(ctx context.Context, hub
 		)
 	})
 
-	for _, client := range definitions.Items {
-		hub.Status.SubResourceCatalog = append(hub.Status.SubResourceCatalog, infrav1beta1.ResourceReference{
-			Kind:       client.Kind,
-			Name:       client.Name,
-			APIVersion: client.APIVersion,
-		})
+	for _, definition := range definitions.Items {
+		ref := infrav1beta1.ResourceReference{
+			Kind:       definition.Kind,
+			Name:       definition.Name,
+			APIVersion: definition.APIVersion,
+		}
+
+		if definition.Namespace != hub.Namespace {
+			ref.Namespace = definition.Namespace
+		}
+
+		hub.Status.SubResourceCatalog = append(hub.Status.SubResourceCatalog, ref)
 	}
 
 	return hub, definitions.Items, nil
