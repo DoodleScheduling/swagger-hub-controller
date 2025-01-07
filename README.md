@@ -9,9 +9,13 @@
 
 This controller manages deployments of swagger-ui.
 The controller can lookup `SwaggerDefinition` references and hook them up with a `SwaggerHub`.
-Each `SwaggerHub` is a manager swagger ui deployment which includes the related swagger definitions.
+Each `SwaggerHub` is a manager [Swagger UI](https://swagger.io/tools/swagger-ui/) deployment which includes the related swagger definitions.
 
-This approach is great for microservices which have their own OpenAPI specs but a unified swagger-ui view is wanted.
+This approach is great for microservices which have their own OpenAPI specs but a unified swagger-ui is wanted.
+
+### Beta API notice
+For v0.x releases and beta api we try not to break the API specs. However
+in rare cases backports happen to fix major issues.
 
 ## Example
 
@@ -39,6 +43,8 @@ kind: SwaggerDefinition
 metadata:
   name: microservice-a
   namespace: default
+  labels:
+    scope: external-api
 spec:
   url: https://microservice-a/openapispecs/v1
 ---
@@ -47,13 +53,11 @@ kind: SwaggerDefinition
 metadata:
   name: microservice-b
   namespace: default
+  labels:
+    scope: external-api
 spec:
   url: https://microservice-b/swagger-specs
 ```
-
-### Beta API notice
-For v0.x releases and beta api we try not to break the API specs. However
-in rare cases backports happen to fix major issues.
 
 ## Deployment template
 It is possible to define a custom swagger-ui deployment template which the controller will use to spin up the managed deployment.
@@ -86,6 +90,59 @@ spec:
           - name: random-sidecar
             image: mysidecar
 ```
+
+## Unify specifications
+
+By utilizing `SwaggerSpecification` resources it is possible to actually merge multiple `SwaggerDefinitions` into one single swagger specification.
+This is useful to represent a collection of `SwaggerDefinitions` as a single entity.
+
+The `SwaggerSpecification` needs to know which `SwaggerDefinitions` is should look up by setting a `spec.definitionSelector` just as with the `SwaggerHub`.
+By default the first server occurrence from the first SwaggerDefinition is used in the new merged specification. However this might not be wanted therefore the OpenAPI servers
+as well as the info specifications can be overwritten just as in the example bellow:
+
+```yaml
+apiVersion: swagger.infra.doodle.com/v1beta1
+kind: SwaggerSpecification
+metadata:
+  name: my-api
+  namespace: default
+spec:
+  info: 
+    title: My API
+  servers:
+  - url: https://api.gateway.net
+    description: example api entrypoint
+  definitionSelector:
+    matchLabels:
+      scope: external-api #Selects all SwaggerDefinitions from above
+---
+apiVersion: swagger.infra.doodle.com/v1beta1
+kind: SwaggerHub
+metadata:
+  name: default
+spec:
+  specificationSelector:
+    matchLabels: {}
+  definitionSelector:
+    matchLabels:
+      scope: other-definitions
+  deploymentTemplate:
+    spec:
+      template:
+        replicas: 3
+        spec:
+          containers:
+          - name: swagger-ui
+            resources:
+              requests:
+                memory: 256Mi
+                cpu: 50m
+              limits:
+                memory: 512Mi
+          - name: random-sidecar
+            image: mysidecar
+```
+
 
 ## Suspend/Resume reconciliation
 

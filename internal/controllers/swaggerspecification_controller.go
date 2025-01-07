@@ -50,9 +50,14 @@ import (
 // SwaggerSpecification reconciles a SwaggerSpecification object
 type SwaggerSpecificationReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Log        logr.Logger
+	Scheme     *runtime.Scheme
+	Recorder   record.EventRecorder
+	HTTPClient httpClient
+}
+
+type httpClient interface {
+	Do(req *http.Request) (*http.Response, error)
 }
 
 type SwaggerSpecificationReconcilerOptions struct {
@@ -193,7 +198,7 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 
 			untypedSpec := make(map[string]interface{})
 
-			err := fetchDefinition(ctx, *definition.Spec.URL, &untypedSpec)
+			err := r.fetchDefinition(ctx, *definition.Spec.URL, &untypedSpec)
 			if err != nil {
 				results <- fetchResult{
 					definition: &definition,
@@ -297,14 +302,14 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 	return specification, schema, nil
 }
 
-func fetchDefinition(ctx context.Context, url string, r interface{}) error {
+func (r *SwaggerSpecificationReconciler) fetchDefinition(ctx context.Context, url string, to interface{}) error {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("create request failed: %w", err)
 	}
 	req = req.WithContext(ctx)
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := r.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("send request failed: %w", err)
 	}
@@ -318,7 +323,7 @@ func fetchDefinition(ctx context.Context, url string, r interface{}) error {
 		return fmt.Errorf("read response body failed: %w", err)
 	}
 
-	err = json.Unmarshal(body, r)
+	err = json.Unmarshal(body, to)
 	if err != nil {
 		return fmt.Errorf("decode response body failed: %w", err)
 	}
