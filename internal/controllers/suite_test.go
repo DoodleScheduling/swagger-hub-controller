@@ -85,6 +85,16 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(k8sManager, SwaggerHubReconcilerOptions{MaxConcurrentReconciles: 10})
 	Expect(err).ToNot(HaveOccurred(), "failed to setup SwaggerHub")
 
+	//+kubebuilder:scaffold:scheme
+	// SwaggerSpecification setup
+	err = (&SwaggerSpecificationReconciler{
+		Client:   k8sManager.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("SwaggerSpecification"),
+		Scheme:   k8sManager.GetScheme(),
+		Recorder: k8sManager.GetEventRecorderFor("SwaggerSpecification"),
+	}).SetupWithManager(k8sManager, SwaggerSpecificationReconcilerOptions{MaxConcurrentReconciles: 10})
+	Expect(err).ToNot(HaveOccurred(), "failed to setup SwaggerSpecification")
+
 	ctx, cancel = context.WithCancel(context.TODO())
 	go func() {
 		err = k8sManager.Start(ctx)

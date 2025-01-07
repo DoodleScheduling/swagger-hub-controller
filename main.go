@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -167,10 +168,11 @@ func main() {
 	}
 
 	specificationReconciler := &controllers.SwaggerSpecificationReconciler{
-		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("SwaggerSpecification"),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("SwaggerSpecification"),
+		Client:     mgr.GetClient(),
+		Log:        ctrl.Log.WithName("controllers").WithName("SwaggerSpecification"),
+		Scheme:     mgr.GetScheme(),
+		Recorder:   mgr.GetEventRecorderFor("SwaggerSpecification"),
+		HTTPClient: http.DefaultClient,
 	}
 
 	if err = specificationReconciler.SetupWithManager(mgr, controllers.SwaggerSpecificationReconcilerOptions{

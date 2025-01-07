@@ -34,6 +34,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - apps
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - swagger.infra.doodle.com
   resources:
   - swaggerdefinitions

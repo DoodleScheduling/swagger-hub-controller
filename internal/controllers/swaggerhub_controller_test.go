@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func needExactStatus(reconciledInstance *v1beta1.SwaggerHub, expectedStatus *v1beta1.SwaggerHubStatus) error {
+func needExactHubStatus(reconciledInstance *v1beta1.SwaggerHub, expectedStatus *v1beta1.SwaggerHubStatus) error {
 	var expectedConditions []string
 	var currentConditions []string
 
@@ -53,7 +53,7 @@ func needExactStatus(reconciledInstance *v1beta1.SwaggerHub, expectedStatus *v1b
 	return nil
 }
 
-var _ = Describe("SwagggerHub controller", func() {
+var _ = Describe("SwaggerHub controller", func() {
 	const (
 		timeout  = time.Second * 4
 		interval = time.Millisecond * 200
@@ -66,11 +66,11 @@ var _ = Describe("SwagggerHub controller", func() {
 				return err
 			}
 
-			return needExactStatus(reconciledInstance, expectedStatus)
+			return needExactHubStatus(reconciledInstance, expectedStatus)
 		}, timeout, interval).Should(BeNil())
 	}
 
-	When("reconciling a suspended SwagggerHub", func() {
+	When("reconciling a suspended SwaggerHub", func() {
 		hubName := fmt.Sprintf("hub-%s", randStringRunes(5))
 
 		It("should not update the status", func() {
