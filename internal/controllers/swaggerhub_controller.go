@@ -51,6 +51,7 @@ import (
 // +kubebuilder:rbac:groups=apps,resources=namespaces,verbs=get;watch;list
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;update;patch;delete;watch;list
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // SwaggerHub reconciles a SwaggerHub object

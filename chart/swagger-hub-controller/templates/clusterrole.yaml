@@ -46,6 +46,7 @@ rules:
   resources:
   - events
   - services
+  - configmaps
   verbs:
   - create
   - delete
