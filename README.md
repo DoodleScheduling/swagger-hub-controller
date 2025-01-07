@@ -7,9 +7,9 @@
 [![Coverage Status](https://coveralls.io/repos/github/DoodleScheduling/swagger-hub-controller/badge.svg?branch=master)](https://coveralls.io/github/DoodleScheduling/swagger-hub-controller?branch=master)
 [![license](https://img.shields.io/github/license/DoodleScheduling/swagger-hub-controller.svg)](https://github.com/DoodleScheduling/swagger-hub-controller/blob/master/LICENSE)
 
-This controller manages deployments of swagger-ui.
+This controller manages deployments of [Swagger UI](https://swagger.io/tools/swagger-ui/).
 The controller can lookup `SwaggerDefinition` references and hook them up with a `SwaggerHub`.
-Each `SwaggerHub` is a manager [Swagger UI](https://swagger.io/tools/swagger-ui/) deployment which includes the related swagger definitions.
+Each `SwaggerHub` is a managed [Swagger UI](https://swagger.io/tools/swagger-ui/) deployment which includes the related swagger definitions.
 
 This approach is great for microservices which have their own OpenAPI specs but a unified swagger-ui is wanted.
 
