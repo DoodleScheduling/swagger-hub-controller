@@ -29,6 +29,7 @@ rules:
   - "swagger.infra.doodle.com"
   resources:
   - swaggerhubs/status
+  - swaggerspecifications/status
   verbs:
   - get
   - patch
