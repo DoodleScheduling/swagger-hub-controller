@@ -109,7 +109,7 @@ func (r *SwaggerSpecificationReconciler) Reconcile(ctx context.Context, req ctrl
 	// Fetch the SwaggerSpecification instance
 	specification := infrav1beta1.SwaggerSpecification{}
 
-	err := r.Client.Get(ctx, req.NamespacedName, &specification)
+	err := r.Get(ctx, req.NamespacedName, &specification)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -315,7 +315,9 @@ func (r *SwaggerSpecificationReconciler) fetchDefinition(ctx context.Context, ur
 	}
 
 	if res.Body != nil {
-		defer res.Body.Close()
+		defer func() {
+      _ = res.Body.Close()
+    }()
 	}
 
 	body, err := io.ReadAll(res.Body)
@@ -408,7 +410,7 @@ func (r *SwaggerSpecificationReconciler) reconcile(ctx context.Context, specific
 	cm.BinaryData["specification.json"] = specJSON
 
 	var existingSpec corev1.ConfigMap
-	err = r.Client.Get(ctx, client.ObjectKey{
+	err = r.Get(ctx, client.ObjectKey{
 		Namespace: cm.Namespace,
 		Name:      cm.Name,
 	}, &existingSpec)
@@ -418,11 +420,11 @@ func (r *SwaggerSpecificationReconciler) reconcile(ctx context.Context, specific
 	}
 
 	if apierrors.IsNotFound(err) {
-		if err := r.Client.Create(ctx, cm); err != nil {
+		if err := r.Create(ctx, cm); err != nil {
 			return specification, ctrl.Result{}, err
 		}
 	} else {
-		if err := r.Client.Update(ctx, cm); err != nil {
+		if err := r.Update(ctx, cm); err != nil {
 			return specification, ctrl.Result{}, err
 		}
 	}
@@ -451,7 +453,7 @@ func (r *SwaggerSpecificationReconciler) extendSpecificationWithDefinitions(ctx 
 			return specification, nil, err
 		}
 
-		err = r.Client.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
+		err = r.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
 		if err != nil {
 			return specification, nil, err
 		}
@@ -459,7 +461,7 @@ func (r *SwaggerSpecificationReconciler) extendSpecificationWithDefinitions(ctx 
 
 	for _, namespace := range namespaces.Items {
 		var namespacedDefinitions infrav1beta1.SwaggerDefinitionList
-		err = r.Client.List(ctx, &namespacedDefinitions, client.InNamespace(namespace.Name), client.MatchingLabelsSelector{Selector: definitionSelector})
+		err = r.List(ctx, &namespacedDefinitions, client.InNamespace(namespace.Name), client.MatchingLabelsSelector{Selector: definitionSelector})
 		if err != nil {
 			return specification, nil, err
 		}
@@ -488,9 +490,9 @@ func (r *SwaggerSpecificationReconciler) extendSpecificationWithDefinitions(ctx 
 func (r *SwaggerSpecificationReconciler) patchStatus(ctx context.Context, specification *infrav1beta1.SwaggerSpecification) error {
 	key := client.ObjectKeyFromObject(specification)
 	latest := &infrav1beta1.SwaggerSpecification{}
-	if err := r.Client.Get(ctx, key, latest); err != nil {
+	if err := r.Get(ctx, key, latest); err != nil {
 		return err
 	}
 
-	return r.Client.Status().Patch(ctx, specification, client.MergeFrom(latest))
+	return r.Status().Patch(ctx, specification, client.MergeFrom(latest))
 }
