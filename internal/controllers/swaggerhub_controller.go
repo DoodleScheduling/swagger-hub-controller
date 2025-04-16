@@ -273,7 +273,7 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	var (
 		gid          int64 = 10000
 		uid          int64 = 10000
-		runAsNonRoot   = true
+		runAsNonRoot       = true
 		replicas     int32 = 1
 	)
 

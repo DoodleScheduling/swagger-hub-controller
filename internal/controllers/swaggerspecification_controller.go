@@ -316,8 +316,8 @@ func (r *SwaggerSpecificationReconciler) fetchDefinition(ctx context.Context, ur
 
 	if res.Body != nil {
 		defer func() {
-      _ = res.Body.Close()
-    }()
+			_ = res.Body.Close()
+		}()
 	}
 
 	body, err := io.ReadAll(res.Body)
