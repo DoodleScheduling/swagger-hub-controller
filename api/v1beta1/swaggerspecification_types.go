@@ -111,12 +111,12 @@ type ServerVariable struct {
 }
 
 func SwaggerSpecificationReconciling(realm SwaggerSpecification, status metav1.ConditionStatus, reason, message string) SwaggerSpecification {
-	setResourceCondition(&realm, ConditionReconciling, status, reason, message, realm.ObjectMeta.Generation)
+	setResourceCondition(&realm, ConditionReconciling, status, reason, message, realm.Generation)
 	return realm
 }
 
 func SwaggerSpecificationReady(realm SwaggerSpecification, status metav1.ConditionStatus, reason, message string) SwaggerSpecification {
-	setResourceCondition(&realm, ConditionReady, status, reason, message, realm.ObjectMeta.Generation)
+	setResourceCondition(&realm, ConditionReady, status, reason, message, realm.Generation)
 	return realm
 }
 

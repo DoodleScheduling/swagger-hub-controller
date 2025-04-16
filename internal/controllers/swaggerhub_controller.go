@@ -110,7 +110,7 @@ func (r *SwaggerHubReconciler) requestsForChangeByDefinitionSelector(ctx context
 				return nil
 			}
 
-			err = r.Client.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
+			err = r.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
 			if err != nil {
 				return nil
 			}
@@ -164,7 +164,7 @@ func (r *SwaggerHubReconciler) requestsForChangeBySpecificationSelector(ctx cont
 				return nil
 			}
 
-			err = r.Client.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
+			err = r.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
 			if err != nil {
 				return nil
 			}
@@ -205,7 +205,7 @@ func (r *SwaggerHubReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Fetch the SwaggerHub instance
 	hub := infrav1beta1.SwaggerHub{}
 
-	err := r.Client.Get(ctx, req.NamespacedName, &hub)
+	err := r.Get(ctx, req.NamespacedName, &hub)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -273,7 +273,7 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	var (
 		gid          int64 = 10000
 		uid          int64 = 10000
-		runAsNonRoot bool  = true
+		runAsNonRoot       = true
 		replicas     int32 = 1
 	)
 
@@ -306,8 +306,8 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	}
 
 	if hub.Spec.DeploymentTemplate != nil {
-		template.ObjectMeta.Labels = hub.Spec.DeploymentTemplate.Labels
-		template.ObjectMeta.Annotations = hub.Spec.DeploymentTemplate.Annotations
+		template.Labels = hub.Spec.DeploymentTemplate.Labels
+		template.Annotations = hub.Spec.DeploymentTemplate.Annotations
 		hub.Spec.DeploymentTemplate.Spec.Template.DeepCopyInto(&template.Spec.Template)
 		template.Spec.MinReadySeconds = hub.Spec.DeploymentTemplate.Spec.MinReadySeconds
 		template.Spec.Paused = hub.Spec.DeploymentTemplate.Spec.Paused
@@ -317,12 +317,12 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		template.Spec.Strategy = hub.Spec.DeploymentTemplate.Spec.Strategy
 	}
 
-	if template.ObjectMeta.Labels == nil {
-		template.ObjectMeta.Labels = make(map[string]string)
+	if template.Labels == nil {
+		template.Labels = make(map[string]string)
 	}
 
-	if template.Spec.Template.ObjectMeta.Labels == nil {
-		template.Spec.Template.ObjectMeta.Labels = make(map[string]string)
+	if template.Spec.Template.Labels == nil {
+		template.Spec.Template.Labels = make(map[string]string)
 	}
 
 	template.Spec.Selector = &metav1.LabelSelector{
@@ -337,12 +337,12 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		template.Spec.Replicas = &replicas
 	}
 
-	template.Spec.Template.ObjectMeta.Labels["app.kubernetes.io/instance"] = "swagger-ui"
-	template.Spec.Template.ObjectMeta.Labels["app.kubernetes.io/name"] = "swagger-ui"
-	template.Spec.Template.ObjectMeta.Labels["swagger-hub-controller/hub"] = hub.Name
-	template.ObjectMeta.Labels["app.kubernetes.io/instance"] = "swagger-ui"
-	template.ObjectMeta.Labels["app.kubernetes.io/name"] = "swagger-ui"
-	template.ObjectMeta.Labels["swagger-hub-controller/hub"] = hub.Name
+	template.Spec.Template.Labels["app.kubernetes.io/instance"] = "swagger-ui"
+	template.Spec.Template.Labels["app.kubernetes.io/name"] = "swagger-ui"
+	template.Spec.Template.Labels["swagger-hub-controller/hub"] = hub.Name
+	template.Labels["app.kubernetes.io/instance"] = "swagger-ui"
+	template.Labels["app.kubernetes.io/name"] = "swagger-ui"
+	template.Labels["swagger-hub-controller/hub"] = hub.Name
 
 	if template.Annotations == nil {
 		template.Annotations = make(map[string]string)
@@ -467,7 +467,7 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	}
 
 	var svc corev1.Service
-	err = r.Client.Get(ctx, client.ObjectKey{
+	err = r.Get(ctx, client.ObjectKey{
 		Namespace: svcTemplate.Namespace,
 		Name:      svcTemplate.Name,
 	}, &svc)
@@ -477,7 +477,7 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	}
 
 	if apierrors.IsNotFound(err) {
-		if err := r.Client.Create(ctx, svcTemplate); err != nil {
+		if err := r.Create(ctx, svcTemplate); err != nil {
 			return hub, ctrl.Result{}, err
 		}
 	} else {
@@ -485,13 +485,13 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 			return hub, ctrl.Result{}, fmt.Errorf("can not take ownership of existing service: %s", svc.Name)
 		}
 
-		if err := r.Client.Update(ctx, svcTemplate); err != nil {
+		if err := r.Update(ctx, svcTemplate); err != nil {
 			return hub, ctrl.Result{}, err
 		}
 	}
 
 	var deployment appsv1.Deployment
-	err = r.Client.Get(ctx, client.ObjectKey{
+	err = r.Get(ctx, client.ObjectKey{
 		Namespace: template.Namespace,
 		Name:      template.Name,
 	}, &deployment)
@@ -501,7 +501,7 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	}
 
 	if apierrors.IsNotFound(err) {
-		if err := r.Client.Create(ctx, template); err != nil {
+		if err := r.Create(ctx, template); err != nil {
 			return hub, ctrl.Result{}, err
 		}
 	} else {
@@ -509,7 +509,7 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 			return hub, ctrl.Result{}, fmt.Errorf("can not take ownership of existing deployment: %s", deployment.Name)
 		}
 
-		if err := r.Client.Update(ctx, template); err != nil {
+		if err := r.Update(ctx, template); err != nil {
 			return hub, ctrl.Result{}, err
 		}
 	}
@@ -538,7 +538,7 @@ func (r *SwaggerHubReconciler) extendhubWithSpecifications(ctx context.Context, 
 			return hub, nil, err
 		}
 
-		err = r.Client.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
+		err = r.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
 		if err != nil {
 			return hub, nil, err
 		}
@@ -546,7 +546,7 @@ func (r *SwaggerHubReconciler) extendhubWithSpecifications(ctx context.Context, 
 
 	for _, namespace := range namespaces.Items {
 		var namespacedSpecification infrav1beta1.SwaggerSpecificationList
-		err = r.Client.List(ctx, &namespacedSpecification, client.InNamespace(namespace.Name), client.MatchingLabelsSelector{Selector: definitionSelector})
+		err = r.List(ctx, &namespacedSpecification, client.InNamespace(namespace.Name), client.MatchingLabelsSelector{Selector: definitionSelector})
 		if err != nil {
 			return hub, nil, err
 		}
@@ -598,7 +598,7 @@ func (r *SwaggerHubReconciler) extendhubWithDefinitions(ctx context.Context, hub
 			return hub, nil, err
 		}
 
-		err = r.Client.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
+		err = r.List(ctx, &namespaces, client.MatchingLabelsSelector{Selector: namespaceSelector})
 		if err != nil {
 			return hub, nil, err
 		}
@@ -606,7 +606,7 @@ func (r *SwaggerHubReconciler) extendhubWithDefinitions(ctx context.Context, hub
 
 	for _, namespace := range namespaces.Items {
 		var namespacedDefinitions infrav1beta1.SwaggerDefinitionList
-		err = r.Client.List(ctx, &namespacedDefinitions, client.InNamespace(namespace.Name), client.MatchingLabelsSelector{Selector: definitionSelector})
+		err = r.List(ctx, &namespacedDefinitions, client.InNamespace(namespace.Name), client.MatchingLabelsSelector{Selector: definitionSelector})
 		if err != nil {
 			return hub, nil, err
 		}
@@ -641,11 +641,11 @@ func (r *SwaggerHubReconciler) extendhubWithDefinitions(ctx context.Context, hub
 func (r *SwaggerHubReconciler) patchStatus(ctx context.Context, hub *infrav1beta1.SwaggerHub) error {
 	key := client.ObjectKeyFromObject(hub)
 	latest := &infrav1beta1.SwaggerHub{}
-	if err := r.Client.Get(ctx, key, latest); err != nil {
+	if err := r.Get(ctx, key, latest); err != nil {
 		return err
 	}
 
-	return r.Client.Status().Patch(ctx, hub, client.MergeFrom(latest))
+	return r.Status().Patch(ctx, hub, client.MergeFrom(latest))
 }
 
 // objectKey returns client.ObjectKey for the object.
