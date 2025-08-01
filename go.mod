@@ -3,7 +3,7 @@ module github.com/DoodleScheduling/swagger-hub-controller
 go 1.24.2
 
 require (
-	github.com/fluxcd/pkg/runtime v0.75.0
+	github.com/fluxcd/pkg/runtime v0.77.0
 	github.com/getkin/kin-openapi v0.132.0
 	github.com/go-logr/logr v1.4.3
 	github.com/kylelemons/godebug v1.1.0
