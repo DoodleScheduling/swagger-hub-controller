@@ -52,7 +52,6 @@ import (
 // +kubebuilder:rbac:groups=apps,resources=namespaces,verbs=get;watch;list
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;update;patch;delete;watch;list
-// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // SwaggerHub reconciles a SwaggerHub object
@@ -274,11 +273,10 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		gid          int64 = 10000
 		uid          int64 = 10000
 		runAsNonRoot       = true
-		replicas     int32 = 1
 	)
 
 	controllerOwner := true
-	template := &appsv1.Deployment{
+	deploymentTemplate := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("swagger-ui-%s", hub.Name),
 			Namespace: hub.Namespace,
@@ -306,26 +304,30 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	}
 
 	if hub.Spec.DeploymentTemplate != nil {
-		template.Labels = hub.Spec.DeploymentTemplate.Labels
-		template.Annotations = hub.Spec.DeploymentTemplate.Annotations
-		hub.Spec.DeploymentTemplate.Spec.Template.DeepCopyInto(&template.Spec.Template)
-		template.Spec.MinReadySeconds = hub.Spec.DeploymentTemplate.Spec.MinReadySeconds
-		template.Spec.Paused = hub.Spec.DeploymentTemplate.Spec.Paused
-		template.Spec.ProgressDeadlineSeconds = hub.Spec.DeploymentTemplate.Spec.ProgressDeadlineSeconds
-		template.Spec.Replicas = hub.Spec.DeploymentTemplate.Spec.Replicas
-		template.Spec.RevisionHistoryLimit = hub.Spec.DeploymentTemplate.Spec.RevisionHistoryLimit
-		template.Spec.Strategy = hub.Spec.DeploymentTemplate.Spec.Strategy
+		deploymentTemplate.Labels = hub.Spec.DeploymentTemplate.Labels
+		deploymentTemplate.Annotations = hub.Spec.DeploymentTemplate.Annotations
+		hub.Spec.DeploymentTemplate.Spec.Template.DeepCopyInto(&deploymentTemplate.Spec.Template)
+		deploymentTemplate.Spec.MinReadySeconds = hub.Spec.DeploymentTemplate.Spec.MinReadySeconds
+		deploymentTemplate.Spec.Paused = hub.Spec.DeploymentTemplate.Spec.Paused
+		deploymentTemplate.Spec.ProgressDeadlineSeconds = hub.Spec.DeploymentTemplate.Spec.ProgressDeadlineSeconds
+		deploymentTemplate.Spec.Replicas = hub.Spec.DeploymentTemplate.Spec.Replicas
+		deploymentTemplate.Spec.RevisionHistoryLimit = hub.Spec.DeploymentTemplate.Spec.RevisionHistoryLimit
+		deploymentTemplate.Spec.Strategy = hub.Spec.DeploymentTemplate.Spec.Strategy
 	}
 
-	if template.Labels == nil {
-		template.Labels = make(map[string]string)
+	if deploymentTemplate.Labels == nil {
+		deploymentTemplate.Labels = make(map[string]string)
 	}
 
-	if template.Spec.Template.Labels == nil {
-		template.Spec.Template.Labels = make(map[string]string)
+	if deploymentTemplate.Spec.Template.Labels == nil {
+		deploymentTemplate.Spec.Template.Labels = make(map[string]string)
 	}
 
-	template.Spec.Selector = &metav1.LabelSelector{
+	if deploymentTemplate.Annotations == nil {
+		deploymentTemplate.Annotations = make(map[string]string)
+	}
+
+	deploymentTemplate.Spec.Selector = &metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"app.kubernetes.io/instance": "swagger-ui",
 			"app.kubernetes.io/name":     "swagger-ui",
@@ -333,20 +335,12 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		},
 	}
 
-	if template.Spec.Replicas == nil {
-		template.Spec.Replicas = &replicas
-	}
-
-	template.Spec.Template.Labels["app.kubernetes.io/instance"] = "swagger-ui"
-	template.Spec.Template.Labels["app.kubernetes.io/name"] = "swagger-ui"
-	template.Spec.Template.Labels["swagger-hub-controller/hub"] = hub.Name
-	template.Labels["app.kubernetes.io/instance"] = "swagger-ui"
-	template.Labels["app.kubernetes.io/name"] = "swagger-ui"
-	template.Labels["swagger-hub-controller/hub"] = hub.Name
-
-	if template.Annotations == nil {
-		template.Annotations = make(map[string]string)
-	}
+	deploymentTemplate.Spec.Template.Labels["app.kubernetes.io/instance"] = "swagger-ui"
+	deploymentTemplate.Spec.Template.Labels["app.kubernetes.io/name"] = "swagger-ui"
+	deploymentTemplate.Spec.Template.Labels["swagger-hub-controller/hub"] = hub.Name
+	deploymentTemplate.Labels["app.kubernetes.io/instance"] = "swagger-ui"
+	deploymentTemplate.Labels["app.kubernetes.io/name"] = "swagger-ui"
+	deploymentTemplate.Labels["swagger-hub-controller/hub"] = hub.Name
 
 	var apiURLs []apiURL
 	for _, definition := range definitions {
@@ -391,7 +385,7 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	}
 
 	for _, specification := range specifications {
-		template.Spec.Template.Spec.Volumes = append(template.Spec.Template.Spec.Volumes, corev1.Volume{
+		deploymentTemplate.Spec.Template.Spec.Volumes = append(deploymentTemplate.Spec.Template.Spec.Volumes, corev1.Volume{
 			Name: fmt.Sprintf("swagger-specification-%s", specification.Name),
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -428,13 +422,13 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		containers[0].Env = append(containers[0].Env, env)
 	}
 
-	containers, err = merge.MergePatchContainers(containers, template.Spec.Template.Spec.Containers)
+	containers, err = merge.MergePatchContainers(containers, deploymentTemplate.Spec.Template.Spec.Containers)
 	if err != nil {
 		return hub, ctrl.Result{}, err
 	}
 
-	template.Spec.Template.Spec.Containers = containers
-	r.Log.Info("create swagger-ui deployment", "deployment-name", template.Name)
+	deploymentTemplate.Spec.Template.Spec.Containers = containers
+	r.Log.Info("create swagger-ui deployment", "deployment-name", deploymentTemplate.Name)
 
 	svcTemplate := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -466,56 +460,53 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		},
 	}
 
-	var svc corev1.Service
-	err = r.Get(ctx, client.ObjectKey{
-		Namespace: svcTemplate.Namespace,
-		Name:      svcTemplate.Name,
-	}, &svc)
-
-	if err != nil && !apierrors.IsNotFound(err) {
+	if err := r.createOrUpdateWithOwnershipValidation(ctx, &hub, svcTemplate); err != nil {
 		return hub, ctrl.Result{}, err
 	}
 
-	if apierrors.IsNotFound(err) {
-		if err := r.Create(ctx, svcTemplate); err != nil {
-			return hub, ctrl.Result{}, err
-		}
-	} else {
-		if !isOwner(&hub, &svc) {
-			return hub, ctrl.Result{}, fmt.Errorf("can not take ownership of existing service: %s", svc.Name)
-		}
-
-		if err := r.Update(ctx, svcTemplate); err != nil {
-			return hub, ctrl.Result{}, err
-		}
-	}
-
-	var deployment appsv1.Deployment
-	err = r.Get(ctx, client.ObjectKey{
-		Namespace: template.Namespace,
-		Name:      template.Name,
-	}, &deployment)
-
-	if err != nil && !apierrors.IsNotFound(err) {
+	if err := r.createOrUpdateWithOwnershipValidation(ctx, &hub, deploymentTemplate); err != nil {
 		return hub, ctrl.Result{}, err
 	}
 
-	if apierrors.IsNotFound(err) {
-		if err := r.Create(ctx, template); err != nil {
-			return hub, ctrl.Result{}, err
-		}
-	} else {
-		if !isOwner(&hub, &deployment) {
-			return hub, ctrl.Result{}, fmt.Errorf("can not take ownership of existing deployment: %s", deployment.Name)
-		}
-
-		if err := r.Update(ctx, template); err != nil {
-			return hub, ctrl.Result{}, err
-		}
-	}
-
-	hub = infrav1beta1.SwaggerHubReady(hub, metav1.ConditionTrue, "ReconciliationSuccessful", fmt.Sprintf("deployment/%s created", template.Name))
+	hub = infrav1beta1.SwaggerHubReady(hub, metav1.ConditionTrue, "ReconciliationSuccessful", fmt.Sprintf("deployment/%s created", deploymentTemplate.Name))
 	return hub, ctrl.Result{}, nil
+}
+
+func (r *SwaggerHubReconciler) createOrUpdateWithOwnershipValidation(ctx context.Context, owner client.Object, obj client.Object) error {
+	existing := obj.DeepCopyObject().(client.Object)
+	err := r.Get(ctx, client.ObjectKey{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+	}, existing)
+
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	if apierrors.IsNotFound(err) {
+		if err := r.Create(ctx, obj); err != nil {
+			return err
+		}
+	} else {
+		if !isOwner(owner, existing) {
+			return fmt.Errorf("can not take ownership of existing resource: %s", obj.GetName())
+		}
+
+		obj.GetObjectKind().SetGroupVersionKind(existing.GetObjectKind().GroupVersionKind())
+		err := r.Patch(
+			ctx,
+			obj,
+			client.Apply,
+			client.FieldOwner("swagger-hub-controller"),
+			client.ForceOwnership,
+		)
+
+		if err != nil {
+			return fmt.Errorf("can not patch resource: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (r *SwaggerHubReconciler) extendhubWithSpecifications(ctx context.Context, hub infrav1beta1.SwaggerHub) (infrav1beta1.SwaggerHub, []infrav1beta1.SwaggerSpecification, error) {
