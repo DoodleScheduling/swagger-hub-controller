@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func needExactHubStatus(reconciledInstance *v1beta1.SwaggerHub, expectedStatus *v1beta1.SwaggerHubStatus) error {
@@ -315,6 +316,148 @@ var _ = Describe("SwaggerHub controller", func() {
 			Expect(k8sClient.Delete(ctx, hub)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, spec1)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, spec2)).Should(Succeed())
+		})
+	})
+
+	When("it reconciles a service which would manage a core v1.service with the same name", func() {
+		hubName := fmt.Sprintf("hub-%s", randStringRunes(5))
+		var hub *v1beta1.SwaggerHub
+
+		It("creates a new existing unmanaged core v1.service", func() {
+			ctx := context.Background()
+			svc := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("swagger-ui-%s", hubName),
+					Namespace: "default",
+				},
+				Spec: corev1.ServiceSpec{
+					Selector: map[string]string{
+						"x": "foo",
+					},
+					Ports: []corev1.ServicePort{
+						{
+							Name:       "http",
+							Port:       80,
+							TargetPort: intstr.FromInt(8080),
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, svc)).Should(Succeed())
+		})
+
+		It("creates a new hub", func() {
+			ctx := context.Background()
+
+			hub = &v1beta1.SwaggerHub{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hubName,
+					Namespace: "default",
+				},
+				Spec: v1beta1.SwaggerHubSpec{},
+			}
+			Expect(k8sClient.Create(ctx, hub)).Should(Succeed())
+		})
+
+		It("fails to reconcile", func() {
+			ctx := context.Background()
+			instanceLookupKey := types.NamespacedName{Name: hubName, Namespace: "default"}
+			reconciledInstance := &v1beta1.SwaggerHub{}
+
+			expectedStatus := &v1beta1.SwaggerHubStatus{
+				ObservedGeneration: 1,
+				Conditions: []metav1.Condition{
+					{
+						Type:    v1beta1.ConditionReady,
+						Status:  metav1.ConditionFalse,
+						Reason:  "ReconciliationFailed",
+						Message: fmt.Sprintf("can not take ownership of existing resource: swagger-ui-%s", hubName),
+					},
+				},
+			}
+			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
+			Expect(len(reconciledInstance.Status.SubResourceCatalog)).Should(Equal(0))
+		})
+
+		It("cleans up", func() {
+			ctx := context.Background()
+			Expect(k8sClient.Delete(ctx, hub)).Should(Succeed())
+		})
+	})
+
+	When("it reconciles a service which would manage a deployment with the same name", func() {
+		hubName := fmt.Sprintf("hub-%s", randStringRunes(5))
+		var hub *v1beta1.SwaggerHub
+
+		It("creates a new existing unmanaged deployment", func() {
+			ctx := context.Background()
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("swagger-ui-%s", hubName),
+					Namespace: "default",
+				},
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"x": "foo",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "foo",
+									Image: "bar",
+								},
+							},
+						},
+					},
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"x": "foo",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, deployment)).Should(Succeed())
+		})
+
+		It("creates a new hub", func() {
+			ctx := context.Background()
+
+			hub = &v1beta1.SwaggerHub{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hubName,
+					Namespace: "default",
+				},
+				Spec: v1beta1.SwaggerHubSpec{},
+			}
+			Expect(k8sClient.Create(ctx, hub)).Should(Succeed())
+		})
+
+		It("fails to reconcile", func() {
+			ctx := context.Background()
+			instanceLookupKey := types.NamespacedName{Name: hubName, Namespace: "default"}
+			reconciledInstance := &v1beta1.SwaggerHub{}
+
+			expectedStatus := &v1beta1.SwaggerHubStatus{
+				ObservedGeneration: 1,
+				Conditions: []metav1.Condition{
+					{
+						Type:    v1beta1.ConditionReady,
+						Status:  metav1.ConditionFalse,
+						Reason:  "ReconciliationFailed",
+						Message: fmt.Sprintf("can not take ownership of existing resource: swagger-ui-%s", hubName),
+					},
+				},
+			}
+			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
+			Expect(len(reconciledInstance.Status.SubResourceCatalog)).Should(Equal(0))
+		})
+
+		It("cleans up", func() {
+			ctx := context.Background()
+			Expect(k8sClient.Delete(ctx, hub)).Should(Succeed())
 		})
 	})
 
