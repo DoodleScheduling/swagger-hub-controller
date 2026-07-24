@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/fluxcd/pkg/runtime v0.80.0
-	github.com/getkin/kin-openapi v0.142.0
+	github.com/getkin/kin-openapi v0.143.0
 	github.com/go-logr/logr v1.4.4
 	github.com/kylelemons/godebug v1.1.0
 	github.com/onsi/ginkgo/v2 v2.32.0
