@@ -47,6 +47,8 @@ import (
 	infrav1beta1 "github.com/DoodleScheduling/swagger-hub-controller/api/v1beta1"
 )
 
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+
 // SwaggerSpecification reconciles a SwaggerSpecification object
 type SwaggerSpecificationReconciler struct {
 	client.Client
@@ -198,7 +200,7 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 
 			untypedSpec := make(map[string]interface{})
 
-			err := r.fetchDefinition(ctx, *definition.Spec.URL, &untypedSpec)
+			err := r.fetchDefinition(ctx, definition, &untypedSpec)
 			if err != nil {
 				results <- fetchResult{
 					definition: &definition,
@@ -265,6 +267,8 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 
 	var paths []openapi3.NewPathsOption
 	var components = make(openapi3.Schemas)
+	var securitySchemes = make(openapi3.SecuritySchemes)
+	var tags openapi3.Tags
 
 	for result := range results {
 		if result.err != nil {
@@ -276,11 +280,32 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 			for name, schema := range result.spec.Components.Schemas {
 				components[name] = schema
 			}
+
+			for name, scheme := range result.spec.Components.SecuritySchemes {
+				securitySchemes[name] = scheme
+			}
+		}
+
+		for _, tag := range result.spec.Tags {
+			tags = append(tags, &openapi3.Tag{
+				Name:         fmt.Sprintf("%s.%s", result.definition.Name, tag.Name),
+				Description:  tag.Description,
+				ExternalDocs: tag.ExternalDocs,
+			})
 		}
 
 		for _, pathItem := range result.spec.Paths.Map() {
 			for _, op := range pathItem.Operations() {
-				op.Tags = []string{result.definition.Name}
+				if len(op.Tags) == 0 {
+					op.Tags = []string{result.definition.Name}
+					continue
+				}
+
+				prefixedTags := make([]string, len(op.Tags))
+				for i, tag := range op.Tags {
+					prefixedTags[i] = fmt.Sprintf("%s.%s", result.definition.Name, tag)
+				}
+				op.Tags = prefixedTags
 			}
 		}
 
@@ -296,18 +321,24 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 
 	schema.Paths = openapi3.NewPaths(paths...)
 	schema.Components = &openapi3.Components{
-		Schemas: components,
+		Schemas:         components,
+		SecuritySchemes: securitySchemes,
 	}
+	schema.Tags = tags
 
 	return specification, schema, nil
 }
 
-func (r *SwaggerSpecificationReconciler) fetchDefinition(ctx context.Context, url string, to interface{}) error {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func (r *SwaggerSpecificationReconciler) fetchDefinition(ctx context.Context, definition infrav1beta1.SwaggerDefinition, to interface{}) error {
+	req, err := http.NewRequest(http.MethodGet, *definition.Spec.URL, nil)
 	if err != nil {
 		return fmt.Errorf("create request failed: %w", err)
 	}
 	req = req.WithContext(ctx)
+
+	if err := r.authenticateRequest(ctx, definition, req); err != nil {
+		return err
+	}
 
 	res, err := r.HTTPClient.Do(req)
 	if err != nil {
@@ -320,6 +351,10 @@ func (r *SwaggerSpecificationReconciler) fetchDefinition(ctx context.Context, ur
 		}()
 	}
 
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		return fmt.Errorf("unexpected http status code %d", res.StatusCode)
+	}
+
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("read response body failed: %w", err)
@@ -329,6 +364,46 @@ func (r *SwaggerSpecificationReconciler) fetchDefinition(ctx context.Context, ur
 	if err != nil {
 		return fmt.Errorf("decode response body failed: %w", err)
 	}
+
+	return nil
+}
+
+// authenticateRequest adds the credentials referenced by the SwaggerDefinition to the request.
+func (r *SwaggerSpecificationReconciler) authenticateRequest(ctx context.Context, definition infrav1beta1.SwaggerDefinition, req *http.Request) error {
+	if definition.Spec.Auth == nil || definition.Spec.Auth.Basic == nil {
+		return nil
+	}
+
+	basic := definition.Spec.Auth.Basic
+	if req.URL.Scheme != "https" && !basic.AllowInsecure {
+		return fmt.Errorf("refusing to send basic auth credentials to an insecure %s:// url", req.URL.Scheme)
+	}
+
+	secretRef := basic.SecretRef
+	var secret corev1.Secret
+	if err := r.Get(ctx, client.ObjectKey{Namespace: definition.Namespace, Name: secretRef.Name}, &secret); err != nil {
+		return fmt.Errorf("failed to get referenced secret %s: %w", secretRef.Name, err)
+	}
+
+	usernameField := cmp.Or(secretRef.UsernameField, "username")
+	passwordField := cmp.Or(secretRef.PasswordField, "password")
+
+	username := basic.Username
+	if username == "" {
+		v, ok := secret.Data[usernameField]
+		if !ok {
+			return fmt.Errorf("field %s not found in secret %s", usernameField, secretRef.Name)
+		}
+
+		username = string(v)
+	}
+
+	password, ok := secret.Data[passwordField]
+	if !ok {
+		return fmt.Errorf("field %s not found in secret %s", passwordField, secretRef.Name)
+	}
+
+	req.SetBasicAuth(username, string(password))
 
 	return nil
 }
