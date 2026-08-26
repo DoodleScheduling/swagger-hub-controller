@@ -134,7 +134,7 @@ func (r *SwaggerSpecificationReconciler) Reconcile(ctx context.Context, req ctrl
 	if err != nil {
 		logger.Error(err, "reconcile error occurred")
 		specification = infrav1beta1.SwaggerSpecificationReady(specification, metav1.ConditionFalse, "ReconciliationFailed", err.Error())
-		r.Recorder.Eventf(&specification, nil, "Normal", "error", err.Error(), "")
+		r.Recorder.Eventf(&specification, nil, "Normal", "error", "", err.Error())
 	}
 
 	// Update status after reconciliation.
