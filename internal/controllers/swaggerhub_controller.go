@@ -54,7 +54,7 @@ import (
 // +kubebuilder:rbac:groups=apps,resources=namespaces,verbs=get;watch;list
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;update;patch;delete;watch;list
-// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 
 // SwaggerHub reconciles a SwaggerHub object
 type SwaggerHubReconciler struct {
