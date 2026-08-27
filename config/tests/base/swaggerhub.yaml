@@ -3,5 +3,6 @@ kind: SwaggerHub
 metadata:
   name: test
 spec:
+  wait: true
   definitionSelector:
     matchLabels: {}

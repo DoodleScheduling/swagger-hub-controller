@@ -319,7 +319,103 @@ var _ = Describe("SwaggerHub controller", func() {
 		})
 	})
 
-	When("it reconciles a service which would manage a core v1.service with the same name", func() {
+	When("it reconciles a hub which has health checks enabled", func() {
+		hubName := fmt.Sprintf("hub-%s", randStringRunes(5))
+		var hub *v1beta1.SwaggerHub
+
+		It("creates a new hub", func() {
+			ctx := context.Background()
+
+			hub = &v1beta1.SwaggerHub{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hubName,
+					Namespace: "default",
+				},
+				Spec: v1beta1.SwaggerHubSpec{
+					Wait: true,
+				},
+			}
+			Expect(k8sClient.Create(ctx, hub)).Should(Succeed())
+		})
+
+		It("should update the hub status to in progress", func() {
+			ctx := context.Background()
+			instanceLookupKey := types.NamespacedName{Name: hubName, Namespace: "default"}
+			reconciledInstance := &v1beta1.SwaggerHub{}
+
+			expectedStatus := &v1beta1.SwaggerHubStatus{
+				ObservedGeneration: 1,
+				Conditions: []metav1.Condition{
+					{
+						Type:    v1beta1.ConditionReady,
+						Status:  metav1.ConditionFalse,
+						Reason:  "ReconciliationFailed",
+						Message: "health check failed; no endpoint is ready",
+					},
+					{
+						Type:    v1beta1.ConditionReconciling,
+						Status:  metav1.ConditionTrue,
+						Reason:  "Progressing",
+						Message: "",
+					},
+					{
+						Type:    v1beta1.ConditionHealthy,
+						Status:  metav1.ConditionFalse,
+						Reason:  "NoEndpointReady",
+						Message: "health check failed; no endpoint is ready",
+					},
+				},
+			}
+			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
+			Expect(len(reconciledInstance.Status.SubResourceCatalog)).Should(Equal(0))
+		})
+
+		It("updates the available replicas", func() {
+			ctx := context.Background()
+			var app appsv1.Deployment
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf("swagger-ui-%s", hubName), Namespace: "default"}, &app)
+			}, timeout, interval).Should(BeNil())
+
+			app.Status.AvailableReplicas = 3
+			app.Status.Replicas = 3
+			app.Status.ReadyReplicas = 3
+			Expect(k8sClient.Status().Update(ctx, &app)).Should(Succeed())
+		})
+
+		It("should update the hub status successfully reconciled with a healthy condition", func() {
+			ctx := context.Background()
+			instanceLookupKey := types.NamespacedName{Name: hubName, Namespace: "default"}
+			reconciledInstance := &v1beta1.SwaggerHub{}
+
+			expectedStatus := &v1beta1.SwaggerHubStatus{
+				ObservedGeneration: 1,
+				Conditions: []metav1.Condition{
+					{
+						Type:    v1beta1.ConditionReady,
+						Status:  metav1.ConditionTrue,
+						Reason:  "ReconciliationSuccessful",
+						Message: fmt.Sprintf("deployment/swagger-ui-%s created", hubName),
+					},
+					{
+						Type:    v1beta1.ConditionHealthy,
+						Status:  metav1.ConditionTrue,
+						Reason:  "EndpointReady",
+						Message: "health check passed; at least one endpoint is ready",
+					},
+				},
+			}
+			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
+			Expect(len(reconciledInstance.Status.SubResourceCatalog)).Should(Equal(0))
+		})
+
+		It("cleans up", func() {
+			ctx := context.Background()
+			Expect(k8sClient.Delete(ctx, hub)).Should(Succeed())
+		})
+	})
+
+	When("it reconciles a hub which conflicts with an existing service not owned by that resource", func() {
 		hubName := fmt.Sprintf("hub-%s", randStringRunes(5))
 		var hub *v1beta1.SwaggerHub
 

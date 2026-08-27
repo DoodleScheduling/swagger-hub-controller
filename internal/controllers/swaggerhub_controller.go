@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -85,6 +86,10 @@ func (r *SwaggerHubReconciler) SetupWithManager(mgr ctrl.Manager, opts SwaggerHu
 			&corev1.Service{},
 			handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &infrav1beta1.SwaggerHub{}, handler.OnlyControllerOwner()),
 		).
+		Watches(
+			&appsv1.Deployment{},
+			handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &infrav1beta1.SwaggerHub{}, handler.OnlyControllerOwner()),
+		).
 		WithOptions(controller.Options{MaxConcurrentReconciles: opts.MaxConcurrentReconciles}).
 		Complete(r)
 }
@@ -135,7 +140,7 @@ func (r *SwaggerHubReconciler) requestsForChangeByDefinitionSelector(ctx context
 		}
 
 		if labelSel.Matches(labels.Set(o.GetLabels())) {
-			r.Log.V(1).Info("referenced resource from a SwaggerHub changed detected", "namespace", hub.GetNamespace(), "hub-name", hub.GetName())
+			r.Log.V(1).Info("swaggerdefinition change update", "namespace", hub.GetNamespace(), "hub-name", hub.GetName())
 			reqs = append(reqs, reconcile.Request{NamespacedName: objectKey(&hub)})
 		}
 	}
@@ -189,7 +194,7 @@ func (r *SwaggerHubReconciler) requestsForChangeBySpecificationSelector(ctx cont
 		}
 
 		if labelSel.Matches(labels.Set(o.GetLabels())) {
-			r.Log.V(1).Info("referenced resource from a SwaggerHub changed detected", "namespace", hub.GetNamespace(), "hub-name", hub.GetName())
+			r.Log.V(1).Info("swagggerspecification change update", "namespace", hub.GetNamespace(), "hub-name", hub.GetName())
 			reqs = append(reqs, reconcile.Request{NamespacedName: objectKey(&hub)})
 		}
 	}
@@ -258,6 +263,12 @@ type apiURL struct {
 }
 
 func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.SwaggerHub) (infrav1beta1.SwaggerHub, ctrl.Result, error) {
+	if hub.Spec.Wait {
+		//TODO this makes only sense if there is some sort of timeout of waiting til a pod is ready, otherwise we transition directly into False anyway
+		//hub = infrav1beta1.SwaggerHubReady(hub, metav1.ConditionUnknown, "Progressing", "Reconciliation in progress")
+		hub = infrav1beta1.SwaggerHubReconciling(hub, metav1.ConditionTrue, "Progressing", "")
+	}
+
 	hub.Status.SubResourceCatalog = []infrav1beta1.ResourceReference{}
 
 	hub, definitions, err := r.extendhubWithDefinitions(ctx, hub)
@@ -469,6 +480,28 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		return hub, ctrl.Result{}, err
 	}
 
+	if hub.Spec.Wait {
+		var app appsv1.Deployment
+		if err := r.Get(ctx, client.ObjectKey{
+			Name:      fmt.Sprintf("swagger-ui-%s", hub.Name),
+			Namespace: hub.Namespace,
+		}, &app); err != nil {
+			return hub, ctrl.Result{}, err
+		}
+
+		if app.Status.ReadyReplicas == 0 {
+			hub = infrav1beta1.SwaggerHubHealthy(hub, metav1.ConditionFalse, "NoEndpointReady", "health check failed; no endpoint is ready")
+			hub = infrav1beta1.SwaggerHubReady(hub, metav1.ConditionFalse, "ReconciliationFailed", "health check failed; no endpoint is ready")
+			r.Recorder.Eventf(&hub, nil, corev1.EventTypeNormal, "Error", "HealthCheck", "health check failed; no endpoint is ready")
+			return hub, ctrl.Result{}, nil
+		}
+
+		hub = infrav1beta1.SwaggerHubHealthy(hub, metav1.ConditionTrue, "EndpointReady", "health check passed; at least one endpoint is ready")
+	} else {
+		conditions.Delete(&hub, infrav1beta1.ConditionHealthy)
+	}
+
+	conditions.Delete(&hub, infrav1beta1.ConditionReconciling)
 	hub = infrav1beta1.SwaggerHubReady(hub, metav1.ConditionTrue, "ReconciliationSuccessful", fmt.Sprintf("deployment/%s created", deploymentTemplate.Name))
 	return hub, ctrl.Result{}, nil
 }
