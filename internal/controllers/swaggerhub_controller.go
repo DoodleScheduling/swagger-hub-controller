@@ -227,7 +227,7 @@ func (r *SwaggerHubReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err != nil {
 		logger.Error(err, "reconcile error occurred")
 		hub = infrav1beta1.SwaggerHubReady(hub, metav1.ConditionFalse, "ReconciliationFailed", err.Error())
-		r.Recorder.Eventf(&hub, nil, "Normal", "error", "", err.Error())
+		r.Recorder.Eventf(&hub, nil, "Normal", "error", "", "%s", err.Error())
 	}
 
 	// Update status after reconciliation.
