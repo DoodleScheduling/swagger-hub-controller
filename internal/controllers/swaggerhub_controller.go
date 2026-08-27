@@ -194,7 +194,7 @@ func (r *SwaggerHubReconciler) requestsForChangeBySpecificationSelector(ctx cont
 		}
 
 		if labelSel.Matches(labels.Set(o.GetLabels())) {
-			r.Log.V(1).Info("swagggerspecification change update", "namespace", hub.GetNamespace(), "hub-name", hub.GetName())
+			r.Log.V(1).Info("swaggerspecification change update", "namespace", hub.GetNamespace(), "hub-name", hub.GetName())
 			reqs = append(reqs, reconcile.Request{NamespacedName: objectKey(&hub)})
 		}
 	}
