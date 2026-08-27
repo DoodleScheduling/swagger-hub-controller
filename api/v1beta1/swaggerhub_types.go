@@ -47,7 +47,7 @@ type SwaggerHubList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&SwaggerHub{}, &SwaggerHubList{})
+	objectTypes = append(objectTypes, &SwaggerHub{}, &SwaggerHubList{})
 }
 
 // SwaggerHubSpec defines the desired state of SwaggerHub
