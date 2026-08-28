@@ -55,6 +55,7 @@ import (
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // SwaggerHub reconciles a SwaggerHub object
 type SwaggerHubReconciler struct {
@@ -492,7 +493,7 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		if app.Status.ReadyReplicas == 0 {
 			hub = infrav1beta1.SwaggerHubHealthy(hub, metav1.ConditionFalse, "NoEndpointReady", "health check failed; no endpoint is ready")
 			hub = infrav1beta1.SwaggerHubReady(hub, metav1.ConditionFalse, "ReconciliationFailed", "health check failed; no endpoint is ready")
-			r.Recorder.Eventf(&hub, nil, corev1.EventTypeNormal, "Error", "HealthCheck", "health check failed; no endpoint is ready")
+			r.Recorder.Eventf(&hub, nil, corev1.EventTypeWarning, "Error", "HealthCheck", "health check failed; no endpoint is ready")
 			return hub, ctrl.Result{}, nil
 		}
 
