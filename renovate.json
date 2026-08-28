@@ -31,47 +31,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["^Makefile$"],
-      "matchStrings": [
-        "go-install-tool,\\$\\([A-Z_]+\\),(?<depName>[^@\\s]+)@(?<currentValue>v[0-9.]+)"
-      ],
-      "datasourceTemplate": "go"
-    }
-  ]
-{
-  "extends": ["config:recommended", "github>whitesource/merge-confidence:beta", ":semanticCommitTypeAll(chore)"],
-  "prHourlyLimit": 50,
-  "prConcurrentLimit": 50, 
-  "osvVulnerabilityAlerts": true,
-  "vulnerabilityAlerts": {
-      "labels": [
-          "security"
-      ]
-  },
-  "stabilityDays": 3,
-  "packageRules": [
-    {
-      "matchPaths": ["**"],
-      "labels": ["dependencies", "{{manager}}"]
-    },
-    {
-      "semanticCommitScope": "deps-dev",
-      "matchManagers": ["github-actions"]
-    },
-    {
-      "description": "Automerge non-major updates",
-      "matchUpdateTypes": ["minor", "patch"],
-      "automerge": true
-    }
-  ],
-  "postUpdateOptions": [
-      "gomodUpdateImportPaths",
-      "gomodTidy"
-  ],
-  "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": ["^Makefile$"],
+      "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [
         "go-install-tool,\\$\\([A-Z_]+\\),(?<depName>[^@\\s]+)@(?<currentValue>v[0-9.]+)"
       ],
@@ -79,7 +39,7 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": ["^Makefile$"],
+      "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [
         "go-install-tool,\\$\\([A-Z_]+\\),(?<depName>[^@\\s]+)@(?<currentValue>release-[0-9.]+)"
       ],
