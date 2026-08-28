@@ -8937,6 +8937,9 @@ spec:
               suspend:
                 description: Suspend reconciliation
                 type: boolean
+              wait:
+                description: Wait for an endpoint to be available
+                type: boolean
             type: object
           status:
             description: SwaggerHubStatus defines the observed state of SwaggerHub
