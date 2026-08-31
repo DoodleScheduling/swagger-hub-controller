@@ -140,7 +140,7 @@ func (r *SwaggerSpecificationReconciler) Reconcile(ctx context.Context, req ctrl
 	// Update status after reconciliation.
 	if err := r.patchStatus(ctx, &specification); err != nil {
 		logger.Error(err, "unable to update status after reconciliation")
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{}, err
 	}
 
 	return result, err
