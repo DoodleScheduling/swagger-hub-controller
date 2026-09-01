@@ -106,7 +106,7 @@ var _ = BeforeSuite(func() {
 		Client:   k8sManager.GetClient(),
 		Log:      ctrl.Log.WithName("controllers").WithName("SwaggerHub"),
 		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor("SwaggerHub"),
+		Recorder: k8sManager.GetEventRecorder("SwaggerHub"),
 	}).SetupWithManager(k8sManager, SwaggerHubReconcilerOptions{MaxConcurrentReconciles: 10})
 	Expect(err).ToNot(HaveOccurred(), "failed to setup SwaggerHub")
 
@@ -116,7 +116,7 @@ var _ = BeforeSuite(func() {
 		Client:     k8sManager.GetClient(),
 		Log:        ctrl.Log.WithName("controllers").WithName("SwaggerSpecification"),
 		Scheme:     k8sManager.GetScheme(),
-		Recorder:   k8sManager.GetEventRecorderFor("SwaggerSpecification"),
+		Recorder:   k8sManager.GetEventRecorder("SwaggerSpecification"),
 		HTTPClient: testHTTPClient,
 	}).SetupWithManager(k8sManager, SwaggerSpecificationReconcilerOptions{MaxConcurrentReconciles: 10})
 	Expect(err).ToNot(HaveOccurred(), "failed to setup SwaggerSpecification")

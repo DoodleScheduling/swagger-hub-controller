@@ -157,7 +157,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Log:      ctrl.Log.WithName("controllers").WithName("SwaggerHub"),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("SwaggerHub"),
+		Recorder: mgr.GetEventRecorder("SwaggerHub"),
 	}
 
 	if err = hubReconciler.SetupWithManager(mgr, controllers.SwaggerHubReconcilerOptions{
@@ -171,7 +171,7 @@ func main() {
 		Client:     mgr.GetClient(),
 		Log:        ctrl.Log.WithName("controllers").WithName("SwaggerSpecification"),
 		Scheme:     mgr.GetScheme(),
-		Recorder:   mgr.GetEventRecorderFor("SwaggerSpecification"),
+		Recorder:   mgr.GetEventRecorder("SwaggerSpecification"),
 		HTTPClient: http.DefaultClient,
 	}
 

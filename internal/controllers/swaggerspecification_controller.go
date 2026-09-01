@@ -35,7 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,7 +54,7 @@ type SwaggerSpecificationReconciler struct {
 	client.Client
 	Log        logr.Logger
 	Scheme     *runtime.Scheme
-	Recorder   record.EventRecorder
+	Recorder   events.EventRecorder
 	HTTPClient httpClient
 }
 
@@ -136,13 +136,13 @@ func (r *SwaggerSpecificationReconciler) Reconcile(ctx context.Context, req ctrl
 	if err != nil {
 		logger.Error(err, "reconcile error occurred")
 		specification = infrav1beta1.SwaggerSpecificationReady(specification, metav1.ConditionFalse, "ReconciliationFailed", err.Error())
-		r.Recorder.Event(&specification, "Normal", "error", err.Error())
+		r.Recorder.Eventf(&specification, nil, corev1.EventTypeWarning, "Error", "Reconcile", "failed to reconcile: %s", err.Error())
 	}
 
 	// Update status after reconciliation.
 	if err := r.patchStatus(ctx, &specification); err != nil {
 		logger.Error(err, "unable to update status after reconciliation")
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{}, err
 	}
 
 	return result, err

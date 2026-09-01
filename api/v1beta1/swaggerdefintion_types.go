@@ -22,7 +22,7 @@ type SwaggerDefinitionList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&SwaggerDefinition{}, &SwaggerDefinitionList{})
+	objectTypes = append(objectTypes, &SwaggerDefinition{}, &SwaggerDefinitionList{})
 }
 
 // SwaggerDefinitionSpec defines the desired state of SwaggerDefinition.
