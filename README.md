@@ -114,10 +114,6 @@ For cluster internal services which are not served over TLS this can be opted ou
         name: microservice-a-credentials
 ```
 
-If the definition is served with a certificate signed by a private CA the controller needs to trust it.
-See the [helm chart values](https://github.com/DoodleScheduling/swagger-hub-controller/tree/master/chart/swagger-hub-controller)
-for mounting a CA bundle via `configMapMounts` and selecting it with `SSL_CERT_FILE`.
-
 ## Deployment template
 It is possible to define a custom swagger-ui deployment template which the controller will use to spin up the managed deployment.
 In the following example the deployment receives an additional container called mysidecar. Also resources
