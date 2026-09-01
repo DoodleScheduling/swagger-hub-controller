@@ -47,7 +47,7 @@ import (
 	infrav1beta1 "github.com/DoodleScheduling/swagger-hub-controller/api/v1beta1"
 )
 
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get
 
 // SwaggerSpecification reconciles a SwaggerSpecification object
 type SwaggerSpecificationReconciler struct {
