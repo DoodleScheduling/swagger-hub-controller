@@ -47,7 +47,7 @@ type SwaggerHubList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&SwaggerHub{}, &SwaggerHubList{})
+	objectTypes = append(objectTypes, &SwaggerHub{}, &SwaggerHubList{})
 }
 
 // SwaggerHubSpec defines the desired state of SwaggerHub
@@ -59,6 +59,10 @@ type SwaggerHubSpec struct {
 	// Suspend reconciliation
 	// +optional
 	Suspend bool `json:"suspend,omitempty"`
+
+	// Wait for an endpoint to be available
+	// +optional
+	Wait bool `json:"wait,omitempty"`
 
 	// DefinitionSelector defines a selector to select swagger definitions associated with this hub
 	DefinitionSelector *metav1.LabelSelector `json:"definitionSelector,omitempty"`
@@ -158,14 +162,19 @@ type ResourceReference struct {
 	APIVersion string `json:"apiVersion,omitempty"`
 }
 
-func SwaggerHubReconciling(realm SwaggerHub, status metav1.ConditionStatus, reason, message string) SwaggerHub {
-	setResourceCondition(&realm, ConditionReconciling, status, reason, message, realm.Generation)
-	return realm
+func SwaggerHubReconciling(hub SwaggerHub, status metav1.ConditionStatus, reason, message string) SwaggerHub {
+	setResourceCondition(&hub, ConditionReconciling, status, reason, message, hub.Generation)
+	return hub
 }
 
-func SwaggerHubReady(realm SwaggerHub, status metav1.ConditionStatus, reason, message string) SwaggerHub {
-	setResourceCondition(&realm, ConditionReady, status, reason, message, realm.Generation)
-	return realm
+func SwaggerHubReady(hub SwaggerHub, status metav1.ConditionStatus, reason, message string) SwaggerHub {
+	setResourceCondition(&hub, ConditionReady, status, reason, message, hub.Generation)
+	return hub
+}
+
+func SwaggerHubHealthy(hub SwaggerHub, status metav1.ConditionStatus, reason, message string) SwaggerHub {
+	setResourceCondition(&hub, ConditionHealthy, status, reason, message, hub.Generation)
+	return hub
 }
 
 // GetStatusConditions returns a pointer to the Status.Conditions slice
