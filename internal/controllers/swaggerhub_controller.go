@@ -463,6 +463,10 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 				return hub, ctrl.Result{}, err
 			}
 		} else {
+			localCopy.UID = localExistingSpec.UID
+			localCopy.ResourceVersion = localExistingSpec.ResourceVersion
+			localCopy.CreationTimestamp = localExistingSpec.CreationTimestamp
+
 			if err := r.Update(ctx, localCopy); err != nil {
 				return hub, ctrl.Result{}, err
 			}

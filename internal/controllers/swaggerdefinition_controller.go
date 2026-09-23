@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -66,6 +67,10 @@ func (r *SwaggerDefinitionReconciler) SetupWithManager(mgr ctrl.Manager, opts Sw
 		For(&infrav1beta1.SwaggerDefinition{}, builder.WithPredicates(
 			predicate.GenerationChangedPredicate{},
 		)).
+		Watches(
+			&corev1.ConfigMap{},
+			handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &infrav1beta1.SwaggerDefinition{}, handler.OnlyControllerOwner()),
+		).
 		WithOptions(controller.Options{MaxConcurrentReconciles: opts.MaxConcurrentReconciles}).
 		Complete(r)
 }
@@ -94,7 +99,7 @@ func (r *SwaggerDefinitionReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, nil
 	}
 
-	if definition.Spec.Timeout.Duration != 0 {
+	if definition.Spec.Timeout.Duration > 0 {
 		c, cancel := context.WithTimeout(ctx, definition.Spec.Timeout.Duration)
 		ctx = c
 		defer cancel()
