@@ -17,7 +17,9 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"math/rand"
 	"net/http"
 	"path/filepath"
@@ -168,6 +170,10 @@ func randStringRunes(n int) string {
 type mockHttpResponse struct {
 	r   *http.Response
 	err error
+
+	// body holds the response payload, a reconcile may happen more than once and each attempt
+	// needs to read it from the start.
+	body []byte
 }
 
 type mockHttpClient struct {
@@ -183,6 +189,16 @@ type mockHttpRequest struct {
 func (c *mockHttpClient) MockResponse(req mockHttpRequest, res *mockHttpResponse) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if res.r != nil && res.r.Body != nil {
+		b, err := io.ReadAll(res.r.Body)
+		Expect(err).ToNot(HaveOccurred())
+		_ = res.r.Body.Close()
+
+		res.body = b
+		res.r.Body = nil
+	}
+
 	c.r[req] = res
 }
 
@@ -196,7 +212,15 @@ func (c *mockHttpClient) Do(req *http.Request) (*http.Response, error) {
 	}
 
 	if res, ok := c.r[mockReq]; ok {
-		return res.r, res.err
+		if res.r == nil {
+			return nil, res.err
+		}
+
+		// Hand out a copy, the caller closes the body and the next request needs its own.
+		clone := *res.r
+		clone.Body = io.NopCloser(bytes.NewReader(res.body))
+
+		return &clone, res.err
 	}
 
 	// Tests which serve a definition from a httptest server register no mock, the request is
