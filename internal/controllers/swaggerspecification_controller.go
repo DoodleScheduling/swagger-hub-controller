@@ -21,11 +21,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -52,14 +49,9 @@ import (
 // SwaggerSpecification reconciles a SwaggerSpecification object
 type SwaggerSpecificationReconciler struct {
 	client.Client
-	Log        logr.Logger
-	Scheme     *runtime.Scheme
-	Recorder   events.EventRecorder
-	HTTPClient httpClient
-}
-
-type httpClient interface {
-	Do(req *http.Request) (*http.Response, error)
+	Log      logr.Logger
+	Scheme   *runtime.Scheme
+	Recorder events.EventRecorder
 }
 
 type SwaggerSpecificationReconcilerOptions struct {
@@ -186,90 +178,104 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 		})
 	}
 
-	results := make(chan fetchResult, len(definitions))
-
-	var wg sync.WaitGroup
-	wg.Add(len(definitions))
-
+	results := make([]fetchResult, 0)
 	for refID, definition := range definitions {
-		go func(refID int, definition infrav1beta1.SwaggerDefinition) {
-			defer wg.Done()
 
-			loader := openapi3.NewLoader()
-			loader.Context = ctx
+		loader := openapi3.NewLoader()
+		loader.Context = ctx
+		untypedSpec := make(map[string]interface{})
 
-			untypedSpec := make(map[string]interface{})
-
-			err := r.fetchDefinition(ctx, definition, &untypedSpec)
-			if err != nil {
-				results <- fetchResult{
-					definition: &definition,
-					err:        fmt.Errorf("failed to load SwaggerDefinition url: %w", err),
-					refID:      refID,
-				}
-
-				return
-			}
-
-			prefixRefs(untypedSpec, definition.Name)
-
-			if v, ok := untypedSpec["components"]; ok {
-				if v, ok := v.(map[string]interface{})["schemas"]; ok {
-					schemas := make(map[string]interface{})
-					for name, definitionSchema := range v.(map[string]interface{}) {
-						newName := fmt.Sprintf("%s.%s", definition.Name, name)
-						schemas[newName] = definitionSchema
-					}
-
-					untypedSpec["components"].(map[string]interface{})["schemas"] = schemas
-				}
-			}
-
-			b, err := json.Marshal(untypedSpec)
-			if err != nil {
-				results <- fetchResult{
-					definition: &definition,
-					err:        fmt.Errorf("failed to marshal specification: %w", err),
-					refID:      refID,
-				}
-
-				return
-			}
-
-			s, err := loader.LoadFromData(b)
-			if err != nil {
-				results <- fetchResult{
-					definition: &definition,
-					err:        fmt.Errorf("failed to load SwaggerDefinition url: %w", err),
-					refID:      refID,
-				}
-
-				return
-			}
-
-			basePath, err := s.Servers.BasePath()
-			if err != nil {
-				err = fmt.Errorf("failed to extract base path: %w", err)
-			}
-
-			results <- fetchResult{
+		var cm corev1.ConfigMap
+		err := r.Get(ctx, client.ObjectKey{
+			Name:      fmt.Sprintf("swagger-definition-%s", definition.Name),
+			Namespace: definition.Namespace,
+		}, &cm)
+		if err != nil {
+			results = append(results, fetchResult{
 				definition: &definition,
-				spec:       s,
-				basePath:   basePath,
-				err:        err,
+				err:        fmt.Errorf("definition configmap does not exists: %w", err),
 				refID:      refID,
-			}
-		}(refID, definition)
-	}
+			})
 
-	wg.Wait()
-	close(results)
+			continue
+		}
+
+		if b, ok := cm.BinaryData["definition.json"]; ok {
+			err = json.Unmarshal(b, &untypedSpec)
+			if err != nil {
+				results = append(results, fetchResult{
+					definition: &definition,
+					err:        fmt.Errorf("failed to unmarshal definition: %w", err),
+					refID:      refID,
+				})
+
+				continue
+			}
+		} else {
+			results = append(results, fetchResult{
+				definition: &definition,
+				err:        fmt.Errorf("definition.json does not exists in definition configmap: %w", err),
+				refID:      refID,
+			})
+
+			continue
+		}
+
+		prefixRefs(untypedSpec, definition.Name)
+
+		if v, ok := untypedSpec["components"]; ok {
+			if v, ok := v.(map[string]interface{})["schemas"]; ok {
+				schemas := make(map[string]interface{})
+				for name, definitionSchema := range v.(map[string]interface{}) {
+					newName := fmt.Sprintf("%s.%s", definition.Name, name)
+					schemas[newName] = definitionSchema
+				}
+
+				untypedSpec["components"].(map[string]interface{})["schemas"] = schemas
+			}
+		}
+
+		b, err := json.Marshal(untypedSpec)
+		if err != nil {
+			results = append(results, fetchResult{
+				definition: &definition,
+				err:        fmt.Errorf("failed to marshal specification: %w", err),
+				refID:      refID,
+			})
+
+			continue
+		}
+
+		s, err := loader.LoadFromData(b)
+		if err != nil {
+			results = append(results, fetchResult{
+				definition: &definition,
+				err:        fmt.Errorf("failed to load SwaggerDefinition url: %w", err),
+				refID:      refID,
+			})
+
+			continue
+		}
+
+		basePath, err := s.Servers.BasePath()
+		if err != nil {
+			err = fmt.Errorf("failed to extract base path: %w", err)
+		}
+
+		results = append(results, fetchResult{
+			definition: &definition,
+			spec:       s,
+			basePath:   basePath,
+			err:        err,
+			refID:      refID,
+		})
+	}
 
 	var paths []openapi3.NewPathsOption
 	var components = make(openapi3.Schemas)
 	var securitySchemes = make(openapi3.SecuritySchemes)
 
-	for result := range results {
+	for _, result := range results {
 		if result.err != nil {
 			specification.Status.SubResourceCatalog[result.refID].Error = result.err.Error()
 			continue
@@ -308,85 +314,6 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 	}
 
 	return specification, schema, nil
-}
-
-func (r *SwaggerSpecificationReconciler) fetchDefinition(ctx context.Context, definition infrav1beta1.SwaggerDefinition, to interface{}) error {
-	req, err := http.NewRequest(http.MethodGet, *definition.Spec.URL, nil)
-	if err != nil {
-		return fmt.Errorf("create request failed: %w", err)
-	}
-	req = req.WithContext(ctx)
-
-	if err := r.authenticateRequest(ctx, definition, req); err != nil {
-		return err
-	}
-
-	res, err := r.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("send request failed: %w", err)
-	}
-
-	if res.Body != nil {
-		defer func() {
-			_ = res.Body.Close()
-		}()
-	}
-
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return fmt.Errorf("unexpected http status code %d", res.StatusCode)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return fmt.Errorf("read response body failed: %w", err)
-	}
-
-	err = json.Unmarshal(body, to)
-	if err != nil {
-		return fmt.Errorf("decode response body failed: %w", err)
-	}
-
-	return nil
-}
-
-// authenticateRequest adds the credentials referenced by the SwaggerDefinition to the request.
-func (r *SwaggerSpecificationReconciler) authenticateRequest(ctx context.Context, definition infrav1beta1.SwaggerDefinition, req *http.Request) error {
-	if definition.Spec.Auth == nil || definition.Spec.Auth.Basic == nil {
-		return nil
-	}
-
-	basic := definition.Spec.Auth.Basic
-	if req.URL.Scheme != "https" && !basic.AllowInsecure {
-		return fmt.Errorf("refusing to send basic auth credentials to an insecure %s:// url", req.URL.Scheme)
-	}
-
-	secretRef := basic.SecretRef
-	var secret corev1.Secret
-	if err := r.Get(ctx, client.ObjectKey{Namespace: definition.Namespace, Name: secretRef.Name}, &secret); err != nil {
-		return fmt.Errorf("failed to get referenced secret %s: %w", secretRef.Name, err)
-	}
-
-	usernameField := cmp.Or(secretRef.UsernameField, "username")
-	passwordField := cmp.Or(secretRef.PasswordField, "password")
-
-	username := basic.Username
-	if username == "" {
-		v, ok := secret.Data[usernameField]
-		if !ok {
-			return fmt.Errorf("field %s not found in secret %s", usernameField, secretRef.Name)
-		}
-
-		username = string(v)
-	}
-
-	password, ok := secret.Data[passwordField]
-	if !ok {
-		return fmt.Errorf("field %s not found in secret %s", passwordField, secretRef.Name)
-	}
-
-	req.SetBasicAuth(username, string(password))
-
-	return nil
 }
 
 func prefixRefs(v interface{}, name string) {

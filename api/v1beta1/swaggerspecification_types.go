@@ -110,14 +110,14 @@ type ServerVariable struct {
 	Description string   `json:"description,omitempty"`
 }
 
-func SwaggerSpecificationReconciling(realm SwaggerSpecification, status metav1.ConditionStatus, reason, message string) SwaggerSpecification {
-	setResourceCondition(&realm, ConditionReconciling, status, reason, message, realm.Generation)
-	return realm
+func SwaggerSpecificationReconciling(specification SwaggerSpecification, status metav1.ConditionStatus, reason, message string) SwaggerSpecification {
+	setResourceCondition(&specification, ConditionReconciling, status, reason, message, specification.Generation)
+	return specification
 }
 
-func SwaggerSpecificationReady(realm SwaggerSpecification, status metav1.ConditionStatus, reason, message string) SwaggerSpecification {
-	setResourceCondition(&realm, ConditionReady, status, reason, message, realm.Generation)
-	return realm
+func SwaggerSpecificationReady(specification SwaggerSpecification, status metav1.ConditionStatus, reason, message string) SwaggerSpecification {
+	setResourceCondition(&specification, ConditionReady, status, reason, message, specification.Generation)
+	return specification
 }
 
 // GetStatusConditions returns a pointer to the Status.Conditions slice

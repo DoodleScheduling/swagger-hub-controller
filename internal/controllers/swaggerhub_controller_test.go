@@ -199,7 +199,11 @@ var _ = Describe("SwaggerHub controller", func() {
 					Namespace: "default",
 				},
 				Spec: v1beta1.SwaggerHubSpec{
-					DefinitionSelector: &metav1.LabelSelector{},
+					DefinitionSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"swagger-hub-controller/hub": hubName,
+						},
+					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, hub)).Should(Succeed())
@@ -214,6 +218,9 @@ var _ = Describe("SwaggerHub controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      spec1Name,
 					Namespace: "default",
+					Labels: map[string]string{
+						"swagger-hub-controller/hub": hubName,
+					},
 				},
 				Spec: v1beta1.SwaggerDefinitionSpec{
 					URL: &u1,
@@ -223,6 +230,9 @@ var _ = Describe("SwaggerHub controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      spec2Name,
 					Namespace: "default",
+					Labels: map[string]string{
+						"swagger-hub-controller/hub": hubName,
+					},
 				},
 				Spec: v1beta1.SwaggerDefinitionSpec{
 					URL: &u2,
@@ -305,7 +315,7 @@ var _ = Describe("SwaggerHub controller", func() {
 			Expect(reconciledInstance.Spec.Template.Spec.Containers[0].Env).To(Equal([]corev1.EnvVar{
 				{
 					Name:  "API_URLS",
-					Value: fmt.Sprintf(`[{"name":"%s:default","url":"https://spec-url-2"},{"name":"%s:default","url":"https://spec-url-1"}]`, spec2Name, spec1Name),
+					Value: fmt.Sprintf(`[{"name":"%s:default","url":"http://localhost/definitions/%s/definition.json"},{"name":"%s:default","url":"http://localhost/definitions/%s/definition.json"}]`, spec2Name, spec2Name, spec1Name, spec1Name),
 				},
 			}))
 			Expect(reconciledInstance.OwnerReferences[0].Name).Should(Equal(hubName))

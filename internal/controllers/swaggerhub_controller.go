@@ -355,14 +355,6 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	deploymentTemplate.Labels["app.kubernetes.io/name"] = "swagger-ui"
 	deploymentTemplate.Labels["swagger-hub-controller/hub"] = hub.Name
 
-	var apiURLs []apiURL
-	for _, definition := range definitions {
-		apiURLs = append(apiURLs, apiURL{
-			Name: fmt.Sprintf("%s:%s", definition.Name, definition.Namespace),
-			URL:  *definition.Spec.URL,
-		})
-	}
-
 	containers := []corev1.Container{
 		{
 			Name:  "swagger-ui",
@@ -392,9 +384,36 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		},
 	}
 
+	var apiURLs []apiURL
+
 	frontendURL := "http://localhost"
 	if hub.Spec.FrontendURL != "" {
 		frontendURL = hub.Spec.FrontendURL
+	}
+
+	for _, definition := range definitions {
+
+		deploymentTemplate.Spec.Template.Spec.Volumes = append(deploymentTemplate.Spec.Template.Spec.Volumes, corev1.Volume{
+			Name: fmt.Sprintf("swagger-definition-%s", definition.Name),
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: fmt.Sprintf("swagger-definition-%s", definition.Name),
+					},
+				},
+			},
+		})
+
+		containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
+			Name:      fmt.Sprintf("swagger-definition-%s", definition.Name),
+			ReadOnly:  true,
+			MountPath: fmt.Sprintf("/usr/share/nginx/html/definitions/%s", definition.Name),
+		})
+
+		apiURLs = append(apiURLs, apiURL{
+			Name: fmt.Sprintf("%s:%s", definition.Name, definition.Namespace),
+			URL:  fmt.Sprintf("%s/definitions/%s/definition.json", frontendURL, definition.Name),
+		})
 	}
 
 	for _, specification := range specifications {
