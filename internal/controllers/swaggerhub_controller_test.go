@@ -19,6 +19,16 @@ func needExactHubStatus(reconciledInstance *v1beta1.SwaggerHub, expectedStatus *
 	var expectedConditions []string
 	var currentConditions []string
 
+	if len(expectedStatus.SubResourceCatalog) != len(reconciledInstance.Status.SubResourceCatalog) {
+		return fmt.Errorf("expected subResourceCatalog %#v does not match, current subResourceCatalog=%#v", expectedStatus.SubResourceCatalog, reconciledInstance.Status.SubResourceCatalog)
+	}
+
+	for i, expectedRef := range expectedStatus.SubResourceCatalog {
+		if expectedRef != reconciledInstance.Status.SubResourceCatalog[i] {
+			return fmt.Errorf("expected subResourceCatalog %#v does not match, current subResourceCatalog=%#v", expectedStatus.SubResourceCatalog, reconciledInstance.Status.SubResourceCatalog)
+		}
+	}
+
 	for _, expectedCondition := range expectedStatus.Conditions {
 		expectedConditions = append(expectedConditions, expectedCondition.Type)
 		var hasCondition bool
@@ -173,7 +183,6 @@ var _ = Describe("SwaggerHub controller", func() {
 				},
 			}
 			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
-			Expect(len(reconciledInstance.Status.SubResourceCatalog)).Should(Equal(0))
 		})
 
 		It("cleans up", func() {
@@ -385,7 +394,6 @@ var _ = Describe("SwaggerHub controller", func() {
 				},
 			}
 			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
-			Expect(len(reconciledInstance.Status.SubResourceCatalog)).Should(Equal(0))
 		})
 
 		It("updates the available replicas", func() {
@@ -424,7 +432,6 @@ var _ = Describe("SwaggerHub controller", func() {
 				},
 			}
 			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
-			Expect(len(reconciledInstance.Status.SubResourceCatalog)).Should(Equal(0))
 		})
 
 		It("cleans up", func() {
@@ -490,7 +497,6 @@ var _ = Describe("SwaggerHub controller", func() {
 				},
 			}
 			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
-			Expect(len(reconciledInstance.Status.SubResourceCatalog)).Should(Equal(0))
 		})
 
 		It("cleans up", func() {
@@ -566,7 +572,6 @@ var _ = Describe("SwaggerHub controller", func() {
 				},
 			}
 			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
-			Expect(len(reconciledInstance.Status.SubResourceCatalog)).Should(Equal(0))
 		})
 
 		It("cleans up", func() {
@@ -631,7 +636,6 @@ var _ = Describe("SwaggerHub controller", func() {
 				},
 			}
 			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
-			Expect(len(reconciledInstance.Status.SubResourceCatalog)).Should(Equal(0))
 		})
 
 		It("should create a deployment", func() {
