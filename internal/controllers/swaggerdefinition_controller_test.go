@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -164,15 +165,13 @@ var _ = Describe("SwaggerDefinition controller", func() {
 
 	When("a definition requires basic auth", func() {
 		var (
-			specification *v1beta1.SwaggerSpecification
-			definition    *v1beta1.SwaggerDefinition
-			secret        *corev1.Secret
-			server        *httptest.Server
-			scope         = randStringRunes(5)
-			name          = fmt.Sprintf("basicauth-%s", randStringRunes(5))
+			definition *v1beta1.SwaggerDefinition
+			secret     *corev1.Secret
+			server     *httptest.Server
+			name       = fmt.Sprintf("basicauth-%s", randStringRunes(5))
 		)
 
-		It("fetches the definition using the credentials from the referenced secret", func() {
+		It("creates a new definition", func() {
 			ctx := context.Background()
 
 			By("serving a definition behind basic auth over https")
@@ -189,7 +188,6 @@ var _ = Describe("SwaggerDefinition controller", func() {
 
 			testHTTPClient.set(server.Client())
 
-			By("creating the credentials secret")
 			secret = &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
@@ -202,12 +200,10 @@ var _ = Describe("SwaggerDefinition controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, secret)).Should(Succeed())
 
-			By("creating a SwaggerDefinition referencing the secret")
 			definition = &v1beta1.SwaggerDefinition{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: "default",
-					Labels:    map[string]string{"scope": scope},
 				},
 				Spec: v1beta1.SwaggerDefinitionSpec{
 					URL: &server.URL,
@@ -221,25 +217,11 @@ var _ = Describe("SwaggerDefinition controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, definition)).Should(Succeed())
+		})
 
-			specification = &v1beta1.SwaggerSpecification{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: "default",
-				},
-				Spec: v1beta1.SwaggerSpecificationSpec{
-					Info: v1beta1.Info{
-						Title: "secured",
-					},
-					DefinitionSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"scope": scope},
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, specification)).Should(Succeed())
-
-			By("waiting for the merged specification")
-			key := types.NamespacedName{Name: fmt.Sprintf("swagger-specification-%s", name), Namespace: "default"}
+		It("should create a new swagger definition configmap using the credentials from the referenced secret", func() {
+			ctx := context.Background()
+			key := types.NamespacedName{Name: fmt.Sprintf("swagger-definition-%s", name), Namespace: "default"}
 			cm := &corev1.ConfigMap{}
 
 			Eventually(func() string {
@@ -247,20 +229,33 @@ var _ = Describe("SwaggerDefinition controller", func() {
 					return ""
 				}
 
-				return string(cm.BinaryData["specification.json"])
+				return string(cm.BinaryData["definition.json"])
 			}, timeout, interval).Should(ContainSubstring(`"/secured"`))
+		})
 
-			reconciledInstance := &v1beta1.SwaggerSpecification{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, reconciledInstance)).Should(Succeed())
-			Expect(reconciledInstance.Status.SubResourceCatalog).Should(HaveLen(1))
-			Expect(reconciledInstance.Status.SubResourceCatalog[0].Error).Should(BeEmpty())
+		It("should update the definition status", func() {
+			ctx := context.Background()
+			instanceLookupKey := types.NamespacedName{Name: name, Namespace: "default"}
+			reconciledInstance := &v1beta1.SwaggerDefinition{}
+
+			expectedStatus := &v1beta1.SwaggerDefinitionStatus{
+				ObservedGeneration: 1,
+				Conditions: []metav1.Condition{
+					{
+						Type:    v1beta1.ConditionReady,
+						Status:  metav1.ConditionTrue,
+						Reason:  "ReconciliationSuccessful",
+						Message: fmt.Sprintf("configmap/swagger-definition-%s created", name),
+					},
+				},
+			}
+			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
 		})
 
 		It("cleans up", func() {
 			ctx := context.Background()
 			server.Close()
 			testHTTPClient.set(http.DefaultClient)
-			Expect(k8sClient.Delete(ctx, specification)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, definition)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, secret)).Should(Succeed())
 		})
@@ -268,21 +263,18 @@ var _ = Describe("SwaggerDefinition controller", func() {
 
 	When("a definition with basic auth points to an insecure url", func() {
 		var (
-			specification *v1beta1.SwaggerSpecification
-			definition    *v1beta1.SwaggerDefinition
-			scope         = randStringRunes(5)
-			name          = fmt.Sprintf("insecure-%s", randStringRunes(5))
-			url           = "http://insecure/openapi"
+			definition *v1beta1.SwaggerDefinition
+			name       = fmt.Sprintf("insecure-%s", randStringRunes(5))
+			url        = "http://insecure/openapi"
 		)
 
-		It("does not send the credentials and reports an error", func() {
+		It("creates a new definition", func() {
 			ctx := context.Background()
 
 			definition = &v1beta1.SwaggerDefinition{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: "default",
-					Labels:    map[string]string{"scope": scope},
 				},
 				Spec: v1beta1.SwaggerDefinitionSpec{
 					URL: &url,
@@ -296,57 +288,53 @@ var _ = Describe("SwaggerDefinition controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, definition)).Should(Succeed())
+		})
 
-			specification = &v1beta1.SwaggerSpecification{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: "default",
-				},
-				Spec: v1beta1.SwaggerSpecificationSpec{
-					Info: v1beta1.Info{
-						Title: "insecure",
-					},
-					DefinitionSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"scope": scope},
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, specification)).Should(Succeed())
+		It("should not create a swagger definition configmap", func() {
+			ctx := context.Background()
+			key := types.NamespacedName{Name: fmt.Sprintf("swagger-definition-%s", name), Namespace: "default"}
+			cm := &corev1.ConfigMap{}
 
+			Consistently(func() bool {
+				return apierrors.IsNotFound(k8sClient.Get(ctx, key, cm))
+			}, time.Second, interval).Should(BeTrue())
+		})
+
+		It("should report the refused credentials in the definition status", func() {
+			ctx := context.Background()
 			instanceLookupKey := types.NamespacedName{Name: name, Namespace: "default"}
-			reconciledInstance := &v1beta1.SwaggerSpecification{}
+			reconciledInstance := &v1beta1.SwaggerDefinition{}
 
 			Eventually(func() string {
 				if err := k8sClient.Get(ctx, instanceLookupKey, reconciledInstance); err != nil {
 					return ""
 				}
 
-				if len(reconciledInstance.Status.SubResourceCatalog) != 1 {
-					return ""
+				for _, condition := range reconciledInstance.Status.Conditions {
+					if condition.Type == v1beta1.ConditionReady {
+						return condition.Message
+					}
 				}
 
-				return reconciledInstance.Status.SubResourceCatalog[0].Error
+				return ""
 			}, timeout, interval).Should(ContainSubstring("refusing to send basic auth credentials to an insecure http:// url"))
 		})
 
 		It("cleans up", func() {
 			ctx := context.Background()
-			Expect(k8sClient.Delete(ctx, specification)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, definition)).Should(Succeed())
 		})
 	})
 
 	When("a definition with basic auth allows an insecure url", func() {
 		var (
-			specification *v1beta1.SwaggerSpecification
-			definition    *v1beta1.SwaggerDefinition
-			secret        *corev1.Secret
-			server        *httptest.Server
-			scope         = randStringRunes(5)
-			name          = fmt.Sprintf("allowinsecure-%s", randStringRunes(5))
+			definition *v1beta1.SwaggerDefinition
+			secret     *corev1.Secret
+			server     *httptest.Server
+			name       = fmt.Sprintf("allowinsecure-%s", randStringRunes(5))
 		)
 
-		It("sends the credentials over http", func() {
+		It("creates a new definition", func() {
 			ctx := context.Background()
 
 			By("serving a definition behind basic auth over http")
@@ -361,7 +349,6 @@ var _ = Describe("SwaggerDefinition controller", func() {
 				_, _ = w.Write([]byte(`{"openapi":"3.0.1","info":{"title":"insecure","version":"1"},"paths":{"/insecure":{"get":{"responses":{"200":{"description":"ok"}}}}}}`))
 			}))
 
-			By("creating the credentials secret")
 			secret = &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
@@ -378,7 +365,6 @@ var _ = Describe("SwaggerDefinition controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: "default",
-					Labels:    map[string]string{"scope": scope},
 				},
 				Spec: v1beta1.SwaggerDefinitionSpec{
 					URL: &server.URL,
@@ -393,25 +379,11 @@ var _ = Describe("SwaggerDefinition controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, definition)).Should(Succeed())
+		})
 
-			specification = &v1beta1.SwaggerSpecification{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: "default",
-				},
-				Spec: v1beta1.SwaggerSpecificationSpec{
-					Info: v1beta1.Info{
-						Title: "insecure",
-					},
-					DefinitionSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"scope": scope},
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, specification)).Should(Succeed())
-
-			By("waiting for the merged specification")
-			key := types.NamespacedName{Name: fmt.Sprintf("swagger-specification-%s", name), Namespace: "default"}
+		It("should create a new swagger definition configmap sending the credentials over http", func() {
+			ctx := context.Background()
+			key := types.NamespacedName{Name: fmt.Sprintf("swagger-definition-%s", name), Namespace: "default"}
 			cm := &corev1.ConfigMap{}
 
 			Eventually(func() string {
@@ -419,14 +391,13 @@ var _ = Describe("SwaggerDefinition controller", func() {
 					return ""
 				}
 
-				return string(cm.BinaryData["specification.json"])
+				return string(cm.BinaryData["definition.json"])
 			}, timeout, interval).Should(ContainSubstring(`"/insecure"`))
 		})
 
 		It("cleans up", func() {
 			ctx := context.Background()
 			server.Close()
-			Expect(k8sClient.Delete(ctx, specification)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, definition)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, secret)).Should(Succeed())
 		})
@@ -434,15 +405,13 @@ var _ = Describe("SwaggerDefinition controller", func() {
 
 	When("a definition with basic auth configures a static username", func() {
 		var (
-			specification *v1beta1.SwaggerSpecification
-			definition    *v1beta1.SwaggerDefinition
-			secret        *corev1.Secret
-			server        *httptest.Server
-			scope         = randStringRunes(5)
-			name          = fmt.Sprintf("staticuser-%s", randStringRunes(5))
+			definition *v1beta1.SwaggerDefinition
+			secret     *corev1.Secret
+			server     *httptest.Server
+			name       = fmt.Sprintf("staticuser-%s", randStringRunes(5))
 		)
 
-		It("uses the static username and the password from the referenced secret", func() {
+		It("creates a new definition", func() {
 			ctx := context.Background()
 
 			By("serving a definition behind basic auth over https")
@@ -475,7 +444,6 @@ var _ = Describe("SwaggerDefinition controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: "default",
-					Labels:    map[string]string{"scope": scope},
 				},
 				Spec: v1beta1.SwaggerDefinitionSpec{
 					URL: &server.URL,
@@ -490,25 +458,11 @@ var _ = Describe("SwaggerDefinition controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, definition)).Should(Succeed())
+		})
 
-			specification = &v1beta1.SwaggerSpecification{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: "default",
-				},
-				Spec: v1beta1.SwaggerSpecificationSpec{
-					Info: v1beta1.Info{
-						Title: "static",
-					},
-					DefinitionSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"scope": scope},
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, specification)).Should(Succeed())
-
-			By("waiting for the merged specification")
-			key := types.NamespacedName{Name: fmt.Sprintf("swagger-specification-%s", name), Namespace: "default"}
+		It("should create a new swagger definition configmap using the static username", func() {
+			ctx := context.Background()
+			key := types.NamespacedName{Name: fmt.Sprintf("swagger-definition-%s", name), Namespace: "default"}
 			cm := &corev1.ConfigMap{}
 
 			Eventually(func() string {
@@ -516,7 +470,7 @@ var _ = Describe("SwaggerDefinition controller", func() {
 					return ""
 				}
 
-				return string(cm.BinaryData["specification.json"])
+				return string(cm.BinaryData["definition.json"])
 			}, timeout, interval).Should(ContainSubstring(`"/static"`))
 		})
 
@@ -524,7 +478,6 @@ var _ = Describe("SwaggerDefinition controller", func() {
 			ctx := context.Background()
 			server.Close()
 			testHTTPClient.set(http.DefaultClient)
-			Expect(k8sClient.Delete(ctx, specification)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, definition)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, secret)).Should(Succeed())
 		})

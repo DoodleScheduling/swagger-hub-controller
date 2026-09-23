@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"net/http"
 	"path/filepath"
@@ -200,5 +199,7 @@ func (c *mockHttpClient) Do(req *http.Request) (*http.Response, error) {
 		return res.r, res.err
 	}
 
-	return nil, fmt.Errorf("request %#v can not be mocked", mockReq)
+	// Tests which serve a definition from a httptest server register no mock, the request is
+	// handed to the real client instead which they can exchange to trust a tls test server.
+	return testHTTPClient.Do(req)
 }

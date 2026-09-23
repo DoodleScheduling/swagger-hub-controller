@@ -55,9 +55,6 @@ spec:
                           SecretRef references a secret in the same namespace as the SwaggerDefinition
                           which holds the credentials.
                         properties:
-                          interval:
-                            description: Interval for reconciliation
-                            type: string
                           name:
                             description: Name of the secret.
                             type: string
@@ -66,9 +63,6 @@ spec:
                             description: PasswordField is the secret key which holds
                               the password.
                             type: string
-                          suspend:
-                            description: Suspend reconciliation
-                            type: boolean
                           usernameField:
                             default: username
                             description: |-
