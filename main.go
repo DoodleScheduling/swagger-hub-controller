@@ -175,12 +175,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	specificationReconciler := &controllers.SwaggerSpecificationReconciler{
+	definitionReconciler := &controllers.SwaggerDefinitionReconciler{
 		Client:     mgr.GetClient(),
-		Log:        ctrl.Log.WithName("controllers").WithName("SwaggerSpecification"),
+		Log:        ctrl.Log.WithName("controllers").WithName("SwaggerDefinition"),
 		Scheme:     mgr.GetScheme(),
-		Recorder:   mgr.GetEventRecorder("SwaggerSpecification"),
+		Recorder:   mgr.GetEventRecorder("SwaggerDefinition"),
 		HTTPClient: http.DefaultClient,
+	}
+
+	if err = definitionReconciler.SetupWithManager(mgr, controllers.SwaggerDefinitionReconcilerOptions{
+		MaxConcurrentReconciles: concurrent,
+	}); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SwaggerDefinition")
+		os.Exit(1)
+	}
+
+	specificationReconciler := &controllers.SwaggerSpecificationReconciler{
+		Client:   mgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("SwaggerSpecification"),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorder("SwaggerSpecification"),
 	}
 
 	if err = specificationReconciler.SetupWithManager(mgr, controllers.SwaggerSpecificationReconcilerOptions{

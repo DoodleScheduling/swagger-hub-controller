@@ -10,4 +10,4 @@ kind: SwaggerDefinition
 metadata:
   name: test-b
 spec:
-  url: https://microservice-b/swagger-specs
+  url: https://raw.githubusercontent.com/OpenAPITools/openapi-generator/refs/heads/master/modules/openapi-generator-online/sample.json

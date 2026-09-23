@@ -11,6 +11,8 @@ type SwaggerDefinition struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec SwaggerDefinitionSpec `json:"spec,omitempty"`
+
+	Status SwaggerDefinitionStatus `json:"status,omitempty"`
 }
 
 // SwaggerDefinitionList contains a list of SwaggerDefinition.
@@ -30,9 +32,20 @@ func init() {
 type SwaggerDefinitionSpec struct {
 	URL *string `json:"url,omitempty"`
 
+	// Suspend reconciliation
+	// +optional
+	Suspend bool `json:"suspend,omitempty"`
+
+	// Interval for reconciliation
+	// +optional
+	Interval metav1.Duration `json:"interval,omitempty"`
+
+	// Timeout for reconciliation
+	// +optional
+	Timeout metav1.Duration `json:"timeout,omitempty"`
+
 	// Auth configures how the controller authenticates while fetching the
-	// definition from url. It is only evaluated by SwaggerSpecification which
-	// fetches definitions server side.
+	// definition from the url.
 	// +optional
 	Auth *DefinitionAuth `json:"auth,omitempty"`
 }
@@ -77,4 +90,36 @@ type LocalSecretReference struct {
 	// +kubebuilder:default:=password
 	// +optional
 	PasswordField string `json:"passwordField,omitempty"`
+}
+
+type SwaggerDefinitionStatus struct {
+	// Conditions holds the conditions for the SwaggerDefinition.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ObservedGeneration is the last generation reconciled by the controller
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+}
+
+func SwaggerDefinitionReconciling(definition SwaggerDefinition, status metav1.ConditionStatus, reason, message string) SwaggerDefinition {
+	setResourceCondition(&definition, ConditionReconciling, status, reason, message, definition.Generation)
+	return definition
+}
+
+func SwaggerDefinitionReady(definition SwaggerDefinition, status metav1.ConditionStatus, reason, message string) SwaggerDefinition {
+	setResourceCondition(&definition, ConditionReady, status, reason, message, definition.Generation)
+	return definition
+}
+
+// GetStatusConditions returns a pointer to the Status.Conditions slice
+func (in *SwaggerDefinition) GetStatusConditions() *[]metav1.Condition {
+	return &in.Status.Conditions
+}
+
+func (in *SwaggerDefinition) GetConditions() []metav1.Condition {
+	return in.Status.Conditions
+}
+
+func (in *SwaggerDefinition) SetConditions(conditions []metav1.Condition) {
+	in.Status.Conditions = conditions
 }

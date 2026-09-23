@@ -48,9 +48,6 @@ import (
 
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerhubs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerhubs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerdefinitions,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerspecifications,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerspecifications/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=namespaces,verbs=get;watch;list
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;update;patch;delete;watch;list
@@ -263,6 +260,12 @@ type apiURL struct {
 	URL  string `json:"url,omitempty"`
 }
 
+type mountRef struct {
+	namespace string
+	name      string
+	configMap string
+}
+
 func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.SwaggerHub) (infrav1beta1.SwaggerHub, ctrl.Result, error) {
 	if hub.Spec.Wait {
 		//TODO this makes only sense if there is some sort of timeout of waiting til a pod is ready, otherwise we transition directly into False anyway
@@ -355,14 +358,6 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	deploymentTemplate.Labels["app.kubernetes.io/name"] = "swagger-ui"
 	deploymentTemplate.Labels["swagger-hub-controller/hub"] = hub.Name
 
-	var apiURLs []apiURL
-	for _, definition := range definitions {
-		apiURLs = append(apiURLs, apiURL{
-			Name: fmt.Sprintf("%s:%s", definition.Name, definition.Namespace),
-			URL:  *definition.Spec.URL,
-		})
-	}
-
 	containers := []corev1.Container{
 		{
 			Name:  "swagger-ui",
@@ -392,32 +387,124 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		},
 	}
 
+	var apiURLs []apiURL
+
 	frontendURL := "http://localhost"
 	if hub.Spec.FrontendURL != "" {
 		frontendURL = hub.Spec.FrontendURL
 	}
 
+	var refs []mountRef
+	for _, definition := range definitions {
+		refs = append(refs, mountRef{
+			namespace: definition.Namespace,
+			name:      definition.Name,
+			configMap: fmt.Sprintf("swagger-definition-%s", definition.Name),
+		})
+	}
+
 	for _, specification := range specifications {
-		deploymentTemplate.Spec.Template.Spec.Volumes = append(deploymentTemplate.Spec.Template.Spec.Volumes, corev1.Volume{
-			Name: fmt.Sprintf("swagger-specification-%s", specification.Name),
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: fmt.Sprintf("swagger-specification-%s", specification.Name),
+		refs = append(refs, mountRef{
+			namespace: specification.Namespace,
+			name:      specification.Name,
+			configMap: fmt.Sprintf("swagger-specification-%s", specification.Name),
+		})
+	}
+
+	var refinedRefs []mountRef
+
+	for _, ref := range refs {
+		var existingSpec corev1.ConfigMap
+		err = r.Get(ctx, client.ObjectKey{
+			Namespace: ref.namespace,
+			Name:      ref.configMap,
+		}, &existingSpec)
+
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				return hub, ctrl.Result{}, err
+			}
+
+			r.Log.V(1).Info("skip reference without configmap", "namespace", ref.namespace, "name", ref.name)
+			continue
+		}
+
+		apiURLs = append(apiURLs, apiURL{
+			Name: fmt.Sprintf("%s:%s", ref.name, ref.namespace),
+			URL:  fmt.Sprintf("%s/definitions/%s/%s/definition.json", frontendURL, ref.namespace, ref.name),
+		})
+
+		if ref.namespace == hub.Namespace {
+			refinedRefs = append(refinedRefs, ref)
+			continue
+		}
+
+		// A pod can only reference configmaps from its own namespace, sources from another
+		// namespace are copied into the namespace of the hub.
+		localCopy := existingSpec.DeepCopy()
+		localCopy.UID = ""
+		localCopy.ResourceVersion = ""
+		localCopy.Name = fmt.Sprintf("%s-%s", existingSpec.Name, existingSpec.Namespace)
+		localCopy.Namespace = hub.Namespace
+		//deliberitely keep the ownerreference from the swaggerdefinition or swaggerspecification
+
+		var localExistingSpec corev1.ConfigMap
+		err = r.Get(ctx, client.ObjectKey{
+			Namespace: localCopy.Namespace,
+			Name:      localCopy.Name,
+		}, &localExistingSpec)
+
+		if err != nil && !apierrors.IsNotFound(err) {
+			return hub, ctrl.Result{}, err
+		}
+
+		if apierrors.IsNotFound(err) {
+			if err := r.Create(ctx, localCopy); err != nil {
+				return hub, ctrl.Result{}, err
+			}
+		} else {
+			localCopy.UID = localExistingSpec.UID
+			localCopy.ResourceVersion = localExistingSpec.ResourceVersion
+			localCopy.CreationTimestamp = localExistingSpec.CreationTimestamp
+
+			if err := r.Update(ctx, localCopy); err != nil {
+				return hub, ctrl.Result{}, err
+			}
+		}
+
+		ref.configMap = localCopy.Name
+		refinedRefs = append(refinedRefs, ref)
+	}
+
+	projection := corev1.ProjectedVolumeSource{}
+	for _, ref := range refinedRefs {
+		projection.Sources = append(projection.Sources, corev1.VolumeProjection{
+			ConfigMap: &corev1.ConfigMapProjection{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: ref.configMap,
+				},
+				Items: []corev1.KeyToPath{
+					{
+						Key:  "definition.json",
+						Path: fmt.Sprintf("%s/%s/definition.json", ref.namespace, ref.name),
 					},
 				},
 			},
 		})
+	}
 
+	if len(projection.Sources) != 0 {
 		containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-			Name:      fmt.Sprintf("swagger-specification-%s", specification.Name),
+			Name:      "definitions",
 			ReadOnly:  true,
-			MountPath: fmt.Sprintf("/usr/share/nginx/html/specifications/%s", specification.Name),
+			MountPath: "/usr/share/nginx/html/definitions",
 		})
 
-		apiURLs = append(apiURLs, apiURL{
-			Name: fmt.Sprintf("%s:%s", specification.Name, specification.Namespace),
-			URL:  fmt.Sprintf("%s/specifications/%s/specification.json", frontendURL, specification.Name),
+		deploymentTemplate.Spec.Template.Spec.Volumes = append(deploymentTemplate.Spec.Template.Spec.Volumes, corev1.Volume{
+			Name: "definitions",
+			VolumeSource: corev1.VolumeSource{
+				Projected: &projection,
+			},
 		})
 	}
 

@@ -65,6 +65,7 @@ rules:
 - apiGroups:
   - swagger.infra.doodle.com
   resources:
+  - swaggerdefinitions/status
   - swaggerhubs/status
   - swaggerspecifications/status
   verbs:
