@@ -261,7 +261,6 @@ type apiURL struct {
 }
 
 type mountRef struct {
-	kind      string
 	namespace string
 	name      string
 	configMap string
@@ -426,13 +425,13 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 				return hub, ctrl.Result{}, err
 			}
 
-			r.Log.V(1).Info("skip reference without configmap", "kind", ref.kind, "namespace", ref.namespace, "name", ref.name)
+			r.Log.V(1).Info("skip reference without configmap", "namespace", ref.namespace, "name", ref.name)
 			continue
 		}
 
 		apiURLs = append(apiURLs, apiURL{
 			Name: fmt.Sprintf("%s:%s", ref.name, ref.namespace),
-			URL:  fmt.Sprintf("%s/%s/%s/%s/definition.json", frontendURL, ref.kind, ref.namespace, ref.name),
+			URL:  fmt.Sprintf("%s/definitions/%s/%s/definition.json", frontendURL, ref.namespace, ref.name),
 		})
 
 		if ref.namespace == hub.Namespace {
@@ -492,13 +491,13 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 
 	if len(projection.Sources) != 0 {
 		containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-			Name:      "specifications",
+			Name:      "definitions",
 			ReadOnly:  true,
-			MountPath: "/usr/share/nginx/html/specifications",
+			MountPath: "/usr/share/nginx/html/definitions",
 		})
 
 		deploymentTemplate.Spec.Template.Spec.Volumes = append(deploymentTemplate.Spec.Template.Spec.Volumes, corev1.Volume{
-			Name: "specifications",
+			Name: "definitions",
 			VolumeSource: corev1.VolumeSource{
 				Projected: &projection,
 			},

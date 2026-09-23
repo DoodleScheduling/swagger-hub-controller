@@ -131,7 +131,7 @@ var _ = Describe("SwaggerSpecification controller", func() {
 			}, timeout, interval).Should(BeNil())
 
 			expected := `{"components":{},"info":{"contact":{},"license":{"name":""},"title":"foo","version":""},"openapi":"3.0.1","paths":{},"servers":[{"url":"http://api"}]}`
-			Expect(string(cm.BinaryData["specification.json"])).Should(Equal(expected))
+			Expect(string(cm.BinaryData["definition.json"])).Should(Equal(expected))
 		})
 
 		It("should update the specification status", func() {
