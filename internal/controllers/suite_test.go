@@ -188,6 +188,9 @@ func (c *mockHttpClient) MockResponse(req mockHttpRequest, res *mockHttpResponse
 }
 
 func (c *mockHttpClient) Do(req *http.Request) (*http.Response, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	mockReq := mockHttpRequest{
 		url:  req.URL.String(),
 		verb: req.Method,

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -39,6 +38,10 @@ import (
 
 	infrav1beta1 "github.com/DoodleScheduling/swagger-hub-controller/api/v1beta1"
 )
+
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get
+// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerdefinitions,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerdefinitions/status,verbs=get;update;patch
 
 // SwaggerDefinition reconciles a SwaggerDefinition object
 type SwaggerDefinitionReconciler struct {
@@ -91,8 +94,11 @@ func (r *SwaggerDefinitionReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, nil
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, time.Second*3)
-	defer cancel()
+	if definition.Spec.Timeout.Duration != 0 {
+		c, cancel := context.WithTimeout(ctx, definition.Spec.Timeout.Duration)
+		ctx = c
+		defer cancel()
+	}
 
 	definition, result, err := r.reconcile(ctx, definition)
 	definition.Status.ObservedGeneration = definition.GetGeneration()
@@ -130,6 +136,10 @@ func (r *SwaggerDefinitionReconciler) fetchDefinition(ctx context.Context, defin
 	res, err := r.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("send request failed: %w", err)
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("request failed with status code %d", res.StatusCode)
 	}
 
 	if res.Body != nil {
@@ -204,7 +214,7 @@ func (r *SwaggerDefinitionReconciler) reconcile(ctx context.Context, definition 
 	}
 
 	if definition.Spec.URL == nil {
-		return definition, ctrl.Result{}, fmt.Errorf("spec.url is required")
+		return definition, ctrl.Result{}, fmt.Errorf("url is required")
 	}
 
 	b, err := r.fetchDefinition(ctx, definition)

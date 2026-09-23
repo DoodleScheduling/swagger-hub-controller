@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -195,9 +196,11 @@ var _ = Describe("SwaggerHub controller", func() {
 		hubName := fmt.Sprintf("hub-%s", randStringRunes(5))
 		spec1Name := fmt.Sprintf("spec-b-%s", randStringRunes(5))
 		spec2Name := fmt.Sprintf("spec-a-%s", randStringRunes(5))
+		spec3Name := fmt.Sprintf("spec-c-%s", randStringRunes(5))
 		var hub *v1beta1.SwaggerHub
 		var spec1 *v1beta1.SwaggerDefinition
 		var spec2 *v1beta1.SwaggerDefinition
+		var spec3 *v1beta1.SwaggerDefinition
 
 		It("creates a new hub", func() {
 			ctx := context.Background()
@@ -213,9 +216,21 @@ var _ = Describe("SwaggerHub controller", func() {
 							"swagger-hub-controller/hub": hubName,
 						},
 					},
+					NamespaceSelector: &metav1.LabelSelector{},
 				},
 			}
 			Expect(k8sClient.Create(ctx, hub)).Should(Succeed())
+		})
+
+		It("creates a second namespace", func() {
+			ctx := context.Background()
+
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "another-namespace",
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).Should(Succeed())
 		})
 
 		It("creates definitions", func() {
@@ -223,6 +238,7 @@ var _ = Describe("SwaggerHub controller", func() {
 
 			u1 := "https://spec-url-1"
 			u2 := "https://spec-url-2"
+			u3 := "https://spec-url-3"
 			spec1 = &v1beta1.SwaggerDefinition{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      spec1Name,
@@ -247,9 +263,22 @@ var _ = Describe("SwaggerHub controller", func() {
 					URL: &u2,
 				},
 			}
+			spec3 = &v1beta1.SwaggerDefinition{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      spec3Name,
+					Namespace: "other-namespace",
+					Labels: map[string]string{
+						"swagger-hub-controller/hub": hubName,
+					},
+				},
+				Spec: v1beta1.SwaggerDefinitionSpec{
+					URL: &u3,
+				},
+			}
 
 			Expect(k8sClient.Create(ctx, spec1)).Should(Succeed())
 			Expect(k8sClient.Create(ctx, spec2)).Should(Succeed())
+			Expect(k8sClient.Create(ctx, spec3)).Should(Succeed())
 		})
 
 		It("should update the hub status", func() {
@@ -276,6 +305,12 @@ var _ = Describe("SwaggerHub controller", func() {
 					{
 						Kind:       "SwaggerDefinition",
 						Name:       spec1Name,
+						APIVersion: "swagger.infra.doodle.com/v1beta1",
+					},
+					{
+						Kind:       "SwaggerDefinition",
+						Name:       spec3Name,
+						Namespace:  "other-namespace",
 						APIVersion: "swagger.infra.doodle.com/v1beta1",
 					},
 				},
@@ -332,7 +367,7 @@ var _ = Describe("SwaggerHub controller", func() {
 			Expect(reconciledInstance.Spec.Template.Spec.Containers[0].Env).To(Equal([]corev1.EnvVar{
 				{
 					Name:  "API_URLS",
-					Value: fmt.Sprintf(`[{"name":"%s:default","url":"http://localhost/definitions/%s/definition.json"},{"name":"%s:default","url":"http://localhost/definitions/%s/definition.json"}]`, spec2Name, spec2Name, spec1Name, spec1Name),
+					Value: fmt.Sprintf(`[{"name":"%s:default","url":"http://localhost/definitions/default/%s/definition.json"},{"name":"%s:default","url":"http://localhost/definitions/default/%s/definition.json"},{"name":"%s:another-namespace","url":"http://localhost/definitions/default/%s/definition.json"}]`, spec2Name, spec2Name, spec1Name, spec1Name, spec3Name, spec3Name),
 				},
 			}))
 			Expect(reconciledInstance.OwnerReferences[0].Name).Should(Equal(hubName))

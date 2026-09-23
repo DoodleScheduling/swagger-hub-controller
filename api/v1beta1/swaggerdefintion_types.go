@@ -40,6 +40,10 @@ type SwaggerDefinitionSpec struct {
 	// +optional
 	Interval metav1.Duration `json:"interval,omitempty"`
 
+	// Timeout for reconciliation
+	// +optional
+	Timeout metav1.Duration `json:"timeout,omitempty"`
+
 	// Auth configures how the controller authenticates while fetching the
 	// definition from the url.
 	// +optional
@@ -86,14 +90,6 @@ type LocalSecretReference struct {
 	// +kubebuilder:default:=password
 	// +optional
 	PasswordField string `json:"passwordField,omitempty"`
-
-	// Suspend reconciliation
-	// +optional
-	Suspend bool `json:"suspend,omitempty"`
-
-	// Interval for reconciliation
-	// +optional
-	Interval metav1.Duration `json:"interval,omitempty"`
 }
 
 type SwaggerDefinitionStatus struct {

@@ -93,6 +93,9 @@ spec:
               suspend:
                 description: Suspend reconciliation
                 type: boolean
+              timeout:
+                description: Timeout for reconciliation
+                type: string
               url:
                 type: string
             type: object

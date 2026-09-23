@@ -27,6 +27,7 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -48,9 +49,6 @@ import (
 
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerhubs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerhubs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerdefinitions,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerspecifications,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerspecifications/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=namespaces,verbs=get;watch;list
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;update;patch;delete;watch;list
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;update;patch;delete;watch;list
@@ -391,52 +389,100 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		frontendURL = hub.Spec.FrontendURL
 	}
 
+	var refs []metav1.Object
 	for _, definition := range definitions {
-
-		deploymentTemplate.Spec.Template.Spec.Volumes = append(deploymentTemplate.Spec.Template.Spec.Volumes, corev1.Volume{
-			Name: fmt.Sprintf("swagger-definition-%s", definition.Name),
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: fmt.Sprintf("swagger-definition-%s", definition.Name),
-					},
-				},
-			},
-		})
-
-		containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-			Name:      fmt.Sprintf("swagger-definition-%s", definition.Name),
-			ReadOnly:  true,
-			MountPath: fmt.Sprintf("/usr/share/nginx/html/definitions/%s", definition.Name),
-		})
-
-		apiURLs = append(apiURLs, apiURL{
-			Name: fmt.Sprintf("%s:%s", definition.Name, definition.Namespace),
-			URL:  fmt.Sprintf("%s/definitions/%s/definition.json", frontendURL, definition.Name),
-		})
+		refs = append(refs, &definition)
 	}
 
 	for _, specification := range specifications {
-		deploymentTemplate.Spec.Template.Spec.Volumes = append(deploymentTemplate.Spec.Template.Spec.Volumes, corev1.Volume{
-			Name: fmt.Sprintf("swagger-specification-%s", specification.Name),
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: fmt.Sprintf("swagger-specification-%s", specification.Name),
+		refs = append(refs, &specification)
+	}
+
+	var refinedRefs []metav1.Object
+
+	for _, ref := range refs {
+		var existingSpec corev1.ConfigMap
+		err = r.Get(ctx, client.ObjectKey{
+			Namespace: ref.GetNamespace(),
+			Name:      ref.GetName(),
+		}, &existingSpec)
+
+		if err != nil && !apierrors.IsNotFound(err) {
+			continue
+		}
+
+		apiURLs = append(apiURLs, apiURL{
+			Name: fmt.Sprintf("%s:%s", ref.GetName(), ref.GetNamespace()),
+			URL:  fmt.Sprintf("%s/definitions/%s/%s/definition.json", frontendURL, ref.GetNamespace(), ref.GetName()),
+		})
+
+		if ref.GetNamespace() == hub.Namespace {
+			refinedRefs = append(refinedRefs, ref)
+			continue
+		}
+
+		localCopy := existingSpec.DeepCopy()
+		localCopy.UID = ""
+		localCopy.ResourceVersion = ""
+		localCopy.Namespace = hub.Namespace
+		localCopy.Name = fmt.Sprintf("%s-%s", localCopy.Name, localCopy.Namespace)
+		//deliberitely keep the ownerreference from the swaggerdefinition or swaggerspecification
+
+		var localExistingSpec corev1.ConfigMap
+		err = r.Get(ctx, client.ObjectKey{
+			Namespace: localCopy.Namespace,
+			Name:      localCopy.Name,
+		}, &localExistingSpec)
+
+		if err != nil && !apierrors.IsNotFound(err) {
+			return hub, ctrl.Result{}, err
+		}
+
+		if apierrors.IsNotFound(err) {
+			if err := r.Create(ctx, localCopy); err != nil {
+				return hub, ctrl.Result{}, err
+			}
+		} else {
+			if err := r.Update(ctx, localCopy); err != nil {
+				return hub, ctrl.Result{}, err
+			}
+		}
+
+		refinedRefs = append(refinedRefs, localCopy)
+	}
+
+	projection := v1.ProjectedVolumeSource{
+		Sources: []v1.VolumeProjection{},
+	}
+
+	for _, ref := range refinedRefs {
+		projection.Sources = append(projection.Sources, v1.VolumeProjection{
+			ConfigMap: &v1.ConfigMapProjection{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: ref.GetName(),
+				},
+				Items: []v1.KeyToPath{
+					{
+						Key:  "specification.json",
+						Path: fmt.Sprintf("%s/%s/definition.json", ref.GetNamespace(), ref.GetName()),
 					},
 				},
 			},
 		})
+	}
 
+	if len(projection.Sources) > 0 {
 		containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-			Name:      fmt.Sprintf("swagger-specification-%s", specification.Name),
+			Name:      "specifications",
 			ReadOnly:  true,
-			MountPath: fmt.Sprintf("/usr/share/nginx/html/specifications/%s", specification.Name),
+			MountPath: "/usr/share/nginx/html/specifications",
 		})
 
-		apiURLs = append(apiURLs, apiURL{
-			Name: fmt.Sprintf("%s:%s", specification.Name, specification.Namespace),
-			URL:  fmt.Sprintf("%s/specifications/%s/specification.json", frontendURL, specification.Name),
+		deploymentTemplate.Spec.Template.Spec.Volumes = append(deploymentTemplate.Spec.Template.Spec.Volumes, corev1.Volume{
+			Name: "specifications",
+			VolumeSource: corev1.VolumeSource{
+				Projected: &projection,
+			},
 		})
 	}
 
