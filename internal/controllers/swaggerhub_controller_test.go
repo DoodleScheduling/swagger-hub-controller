@@ -1,8 +1,11 @@
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"time"
 
 	"github.com/DoodleScheduling/swagger-hub-controller/api/v1beta1"
@@ -10,7 +13,6 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -225,7 +227,7 @@ var _ = Describe("SwaggerHub controller", func() {
 		It("creates a second namespace", func() {
 			ctx := context.Background()
 
-			ns := &v1.Namespace{
+			ns := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "another-namespace",
 				},
@@ -239,6 +241,12 @@ var _ = Describe("SwaggerHub controller", func() {
 			u1 := "https://spec-url-1"
 			u2 := "https://spec-url-2"
 			u3 := "https://spec-url-3"
+
+			for _, u := range []string{u1, u2, u3} {
+				testHttpClient.MockResponse(mockHttpRequest{url: u, verb: http.MethodGet}, &mockHttpResponse{
+					r: &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(`{"openapi":"3.0.1"}`))},
+				})
+			}
 			spec1 = &v1beta1.SwaggerDefinition{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      spec1Name,
@@ -266,7 +274,7 @@ var _ = Describe("SwaggerHub controller", func() {
 			spec3 = &v1beta1.SwaggerDefinition{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      spec3Name,
-					Namespace: "other-namespace",
+					Namespace: "another-namespace",
 					Labels: map[string]string{
 						"swagger-hub-controller/hub": hubName,
 					},
@@ -310,7 +318,7 @@ var _ = Describe("SwaggerHub controller", func() {
 					{
 						Kind:       "SwaggerDefinition",
 						Name:       spec3Name,
-						Namespace:  "other-namespace",
+						Namespace:  "another-namespace",
 						APIVersion: "swagger.infra.doodle.com/v1beta1",
 					},
 				},
@@ -367,7 +375,7 @@ var _ = Describe("SwaggerHub controller", func() {
 			Expect(reconciledInstance.Spec.Template.Spec.Containers[0].Env).To(Equal([]corev1.EnvVar{
 				{
 					Name:  "API_URLS",
-					Value: fmt.Sprintf(`[{"name":"%s:default","url":"http://localhost/definitions/default/%s/definition.json"},{"name":"%s:default","url":"http://localhost/definitions/default/%s/definition.json"},{"name":"%s:another-namespace","url":"http://localhost/definitions/default/%s/definition.json"}]`, spec2Name, spec2Name, spec1Name, spec1Name, spec3Name, spec3Name),
+					Value: fmt.Sprintf(`[{"name":"%s:default","url":"http://localhost/definitions/default/%s/definition.json"},{"name":"%s:default","url":"http://localhost/definitions/default/%s/definition.json"},{"name":"%s:another-namespace","url":"http://localhost/definitions/another-namespace/%s/definition.json"}]`, spec2Name, spec2Name, spec1Name, spec1Name, spec3Name, spec3Name),
 				},
 			}))
 			Expect(reconciledInstance.OwnerReferences[0].Name).Should(Equal(hubName))

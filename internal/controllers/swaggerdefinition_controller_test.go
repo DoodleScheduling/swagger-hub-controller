@@ -108,7 +108,7 @@ var _ = Describe("SwaggerDefinition controller", func() {
 			ctx := context.Background()
 
 			testHttpClient.MockResponse(mockHttpRequest{url: url, verb: http.MethodGet}, &mockHttpResponse{
-				r:   &http.Response{Body: io.NopCloser(bytes.NewBufferString(`{"components":{},"info":{"contact":{},"license":{"name":""},"title":"foo","version":""},"openapi":"3.0.1","paths":{},"servers":[{"url":"http://api"}]}`))},
+				r:   &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(`{"components":{},"info":{"contact":{},"license":{"name":""},"title":"foo","version":""},"openapi":"3.0.1","paths":{},"servers":[{"url":"http://api"}]}`))},
 				err: nil,
 			})
 

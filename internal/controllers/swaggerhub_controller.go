@@ -27,7 +27,6 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -261,6 +260,13 @@ type apiURL struct {
 	URL  string `json:"url,omitempty"`
 }
 
+type mountRef struct {
+	kind      string
+	namespace string
+	name      string
+	configMap string
+}
+
 func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.SwaggerHub) (infrav1beta1.SwaggerHub, ctrl.Result, error) {
 	if hub.Spec.Wait {
 		//TODO this makes only sense if there is some sort of timeout of waiting til a pod is ready, otherwise we transition directly into False anyway
@@ -389,43 +395,58 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 		frontendURL = hub.Spec.FrontendURL
 	}
 
-	var refs []metav1.Object
+	var refs []mountRef
 	for _, definition := range definitions {
-		refs = append(refs, &definition)
+		refs = append(refs, mountRef{
+			namespace: definition.Namespace,
+			name:      definition.Name,
+			configMap: fmt.Sprintf("swagger-definition-%s", definition.Name),
+		})
 	}
 
 	for _, specification := range specifications {
-		refs = append(refs, &specification)
+		refs = append(refs, mountRef{
+			namespace: specification.Namespace,
+			name:      specification.Name,
+			configMap: fmt.Sprintf("swagger-specification-%s", specification.Name),
+		})
 	}
 
-	var refinedRefs []metav1.Object
+	var refinedRefs []mountRef
 
 	for _, ref := range refs {
 		var existingSpec corev1.ConfigMap
 		err = r.Get(ctx, client.ObjectKey{
-			Namespace: ref.GetNamespace(),
-			Name:      ref.GetName(),
+			Namespace: ref.namespace,
+			Name:      ref.configMap,
 		}, &existingSpec)
 
-		if err != nil && !apierrors.IsNotFound(err) {
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				return hub, ctrl.Result{}, err
+			}
+
+			r.Log.V(1).Info("skip reference without configmap", "kind", ref.kind, "namespace", ref.namespace, "name", ref.name)
 			continue
 		}
 
 		apiURLs = append(apiURLs, apiURL{
-			Name: fmt.Sprintf("%s:%s", ref.GetName(), ref.GetNamespace()),
-			URL:  fmt.Sprintf("%s/definitions/%s/%s/definition.json", frontendURL, ref.GetNamespace(), ref.GetName()),
+			Name: fmt.Sprintf("%s:%s", ref.name, ref.namespace),
+			URL:  fmt.Sprintf("%s/%s/%s/%s/definition.json", frontendURL, ref.kind, ref.namespace, ref.name),
 		})
 
-		if ref.GetNamespace() == hub.Namespace {
+		if ref.namespace == hub.Namespace {
 			refinedRefs = append(refinedRefs, ref)
 			continue
 		}
 
+		// A pod can only reference configmaps from its own namespace, sources from another
+		// namespace are copied into the namespace of the hub.
 		localCopy := existingSpec.DeepCopy()
 		localCopy.UID = ""
 		localCopy.ResourceVersion = ""
+		localCopy.Name = fmt.Sprintf("%s-%s", existingSpec.Name, existingSpec.Namespace)
 		localCopy.Namespace = hub.Namespace
-		localCopy.Name = fmt.Sprintf("%s-%s", localCopy.Name, localCopy.Namespace)
 		//deliberitely keep the ownerreference from the swaggerdefinition or swaggerspecification
 
 		var localExistingSpec corev1.ConfigMap
@@ -448,30 +469,28 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 			}
 		}
 
-		refinedRefs = append(refinedRefs, localCopy)
+		ref.configMap = localCopy.Name
+		refinedRefs = append(refinedRefs, ref)
 	}
 
-	projection := v1.ProjectedVolumeSource{
-		Sources: []v1.VolumeProjection{},
-	}
-
+	projection := corev1.ProjectedVolumeSource{}
 	for _, ref := range refinedRefs {
-		projection.Sources = append(projection.Sources, v1.VolumeProjection{
-			ConfigMap: &v1.ConfigMapProjection{
+		projection.Sources = append(projection.Sources, corev1.VolumeProjection{
+			ConfigMap: &corev1.ConfigMapProjection{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: ref.GetName(),
+					Name: ref.configMap,
 				},
-				Items: []v1.KeyToPath{
+				Items: []corev1.KeyToPath{
 					{
-						Key:  "specification.json",
-						Path: fmt.Sprintf("%s/%s/definition.json", ref.GetNamespace(), ref.GetName()),
+						Key:  "definition.json",
+						Path: fmt.Sprintf("%s/%s/definition.json", ref.namespace, ref.name),
 					},
 				},
 			},
 		})
 	}
 
-	if len(projection.Sources) > 0 {
+	if len(projection.Sources) != 0 {
 		containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
 			Name:      "specifications",
 			ReadOnly:  true,

@@ -391,7 +391,7 @@ func (r *SwaggerSpecificationReconciler) reconcile(ctx context.Context, specific
 	}
 
 	cm.BinaryData = make(map[string][]byte)
-	cm.BinaryData["specification.json"] = specJSON
+	cm.BinaryData["definition.json"] = specJSON
 
 	var existingSpec corev1.ConfigMap
 	err = r.Get(ctx, client.ObjectKey{
