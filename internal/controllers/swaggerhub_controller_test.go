@@ -258,20 +258,28 @@ var _ = Describe("SwaggerHub controller", func() {
 						Message: fmt.Sprintf("deployment/swagger-ui-%s created", hubName),
 					},
 				},
+				SubResourceCatalog: []v1beta1.ResourceReference{
+					{
+						Kind:       "SwaggerDefinition",
+						Name:       spec2Name,
+						APIVersion: "swagger.infra.doodle.com/v1beta1",
+					},
+					{
+						Kind:       "SwaggerDefinition",
+						Name:       spec1Name,
+						APIVersion: "swagger.infra.doodle.com/v1beta1",
+					},
+				},
 			}
-			eventuallyMatchExactConditions(ctx, instanceLookupKey, reconciledInstance, expectedStatus)
-			Expect(reconciledInstance.Status.SubResourceCatalog).Should(Equal([]v1beta1.ResourceReference{
-				{
-					Kind:       "SwaggerDefinition",
-					Name:       spec2Name,
-					APIVersion: "swagger.infra.doodle.com/v1beta1",
-				},
-				{
-					Kind:       "SwaggerDefinition",
-					Name:       spec1Name,
-					APIVersion: "swagger.infra.doodle.com/v1beta1",
-				},
-			}))
+
+			Eventually(func() error {
+				err := k8sClient.Get(ctx, instanceLookupKey, reconciledInstance)
+				if err != nil {
+					return err
+				}
+
+				return needExactHubStatus(reconciledInstance, expectedStatus)
+			}, timeout, interval).Should(BeNil())
 		})
 
 		It("should create a service", func() {
