@@ -44,6 +44,7 @@ import (
 	infrav1beta1 "github.com/DoodleScheduling/swagger-hub-controller/api/v1beta1"
 )
 
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerspecifications,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerspecifications/status,verbs=get;update;patch
 

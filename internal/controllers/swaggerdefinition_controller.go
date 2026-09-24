@@ -41,6 +41,7 @@ import (
 )
 
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerdefinitions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=swagger.infra.doodle.com,resources=swaggerdefinitions/status,verbs=get;update;patch
 
