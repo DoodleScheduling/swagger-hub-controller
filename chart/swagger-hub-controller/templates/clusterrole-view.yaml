@@ -15,17 +15,9 @@ rules:
 - apiGroups:
   - "swagger.infra.doodle.com"
   resources:
-  - swaggerhubs
-  - swaggerdefinitions
-  - swaggerspecifications
+  - "*"
   verbs:
   - get
   - list
   - watch
-- apiGroups:
-  - "swagger.infra.doodle.com"
-  resources:
-  - swaggerhubs/status
-  verbs:
-  - get
 {{- end }}

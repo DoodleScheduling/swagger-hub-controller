@@ -76,7 +76,8 @@ docker_manifests:
   - ghcr.io/doodlescheduling/{{ .ProjectName }}:v{{ .Version }}-arm64v8
 
 signs:
-- cmd: cosign
+- id: cosign
+  cmd: cosign
   signature: "${artifact}.sigstore.json"
   args:
   - sign-blob
@@ -87,10 +88,21 @@ signs:
   output: true
 
 docker_signs:
-  - cmd: cosign
+  - id: cosign
+    cmd: cosign
     artifacts: all
     output: true
     args:
     - 'sign'
+    - --yes
+    - '${artifact}'
+  - id: cosign-legacy
+    cmd: cosign
+    artifacts: all
+    output: true
+    args:
+    - 'sign'
+    - --new-bundle-format=false
+    - --use-signing-config=false
     - --yes
     - '${artifact}'

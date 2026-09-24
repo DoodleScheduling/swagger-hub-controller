@@ -80,3 +80,4 @@ jobs:
           helm push ${{ github.workspace }}/chart/swagger-hub-controller-*.tgz oci://ghcr.io/$repository/charts |& tee .digest
           cosign login --username ${GITHUB_ACTOR} --password ${{ secrets.GITHUB_TOKEN }} ghcr.io
           cosign sign --yes ghcr.io/$repository/charts/swagger-hub-controller@$(cat .digest | awk -F "[, ]+" '/Digest/{print $NF}')
+          cosign sign --new-bundle-format=false --use-signing-config=false --yes ghcr.io/$repository/charts/swagger-hub-controller@$(cat .digest | awk -F "[, ]+" '/Digest/{print $NF}')

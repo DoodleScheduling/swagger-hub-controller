@@ -16,9 +16,7 @@ rules:
 - apiGroups:
   - "swagger.infra.doodle.com"
   resources:
-  - swaggerhubs
-  - swaggerdefinitions
-  - swaggerspecifications
+  - "*"
   verbs:
   - create
   - delete
@@ -27,10 +25,4 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - "swagger.infra.doodle.com"
-  resources:
-  - swaggerhubs/status
-  verbs:
-  - get
 {{- end }}
