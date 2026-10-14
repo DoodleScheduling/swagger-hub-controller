@@ -227,6 +227,7 @@ Alternatively you may get the bundled manifests in each release to deploy it usi
 The controller can be configured using cmd args:
 ```
 --concurrent int                            The number of concurrent SwaggerHub reconciles. (default 4)
+--default-swagger-ui-image string           The default swagger-ui image used for managed SwaggerHub deployments. (default "swaggerapi/swagger-ui:latest")
 --enable-leader-election                    Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.
 --graceful-shutdown-timeout duration        The duration given to the reconciler to finish before forcibly stopping. (default 10m0s)
 --health-addr string                        The address the health endpoint binds to. (default ":9557")

@@ -61,6 +61,7 @@ var (
 	healthAddr              string
 	concurrent              int
 	gracefulShutdownTimeout time.Duration
+	defaultSwaggerUIImage   string
 	clientOptions           client.Options
 	kubeConfigOpts          client.KubeConfigOptions
 	logOptions              logger.Options
@@ -78,6 +79,9 @@ func main() {
 		"The number of concurrent SwaggerHub reconciles.")
 	flag.DurationVar(&gracefulShutdownTimeout, "graceful-shutdown-timeout", 600*time.Second,
 		"The duration given to the reconciler to finish before forcibly stopping.")
+
+	flag.StringVar(&defaultSwaggerUIImage, "default-swagger-ui-image", "swaggerapi/swagger-ui:latest",
+		"The default swagger-ui image used for managed SwaggerHub deployments.")
 
 	clientOptions.BindFlags(flag.CommandLine)
 	logOptions.BindFlags(flag.CommandLine)
@@ -162,14 +166,16 @@ func main() {
 	}
 
 	hubReconciler := &controllers.SwaggerHubReconciler{
-		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("SwaggerHub"),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorder("SwaggerHub"),
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("controllers").WithName("SwaggerHub"),
+		Scheme:                mgr.GetScheme(),
+		Recorder:              mgr.GetEventRecorder("SwaggerHub"),
+		DefaultSwaggerUIImage: defaultSwaggerUIImage,
 	}
 
 	if err = hubReconciler.SetupWithManager(mgr, controllers.SwaggerHubReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
+		DefaultSwaggerUIImage:   defaultSwaggerUIImage,
 	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SwaggerHub")
 		os.Exit(1)

@@ -50,6 +50,9 @@ spec:
         image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
+        {{- if and .Values.swaggerUI (and .Values.swaggerUI.image .Values.swaggerUI.image.repository) }}
+        - --default-swagger-ui-image={{ include "swagger-hub-controller.swaggerUIImage" . }}
+        {{- end }}
         {{- if .Values.kubeRBACProxy.enabled }}
         - --metrics-addr=127.0.0.1:9556
         {{- end }}

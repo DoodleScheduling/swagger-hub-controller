@@ -64,3 +64,14 @@ Determine configmap name, can either be the self-created of an existing one
 {{- end -}}
 {{- end -}}
 
+{{/*
+Construct the default swagger-ui image name.
+*/}}
+{{- define "swagger-hub-controller.swaggerUIImage" -}}
+{{- if .Values.swaggerUI.image.registry -}}
+    {{- printf "%s/%s:%s" .Values.swaggerUI.image.registry .Values.swaggerUI.image.repository .Values.swaggerUI.image.tag -}}
+{{- else -}}
+    {{- printf "%s:%s" .Values.swaggerUI.image.repository .Values.swaggerUI.image.tag -}}
+{{- end -}}
+{{- end -}}
+

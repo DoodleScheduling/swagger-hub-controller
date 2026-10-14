@@ -58,17 +58,22 @@ import (
 // SwaggerHub reconciles a SwaggerHub object
 type SwaggerHubReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	Recorder events.EventRecorder
+	Log                   logr.Logger
+	Scheme                *runtime.Scheme
+	Recorder              events.EventRecorder
+	DefaultSwaggerUIImage string
 }
 
 type SwaggerHubReconcilerOptions struct {
 	MaxConcurrentReconciles int
+	DefaultSwaggerUIImage   string
 }
 
 // SetupWithManager adding controllers
 func (r *SwaggerHubReconciler) SetupWithManager(mgr ctrl.Manager, opts SwaggerHubReconcilerOptions) error {
+	if opts.DefaultSwaggerUIImage != "" {
+		r.DefaultSwaggerUIImage = opts.DefaultSwaggerUIImage
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&infrav1beta1.SwaggerHub{}, builder.WithPredicates(
 			predicate.GenerationChangedPredicate{},
@@ -359,10 +364,15 @@ func (r *SwaggerHubReconciler) reconcile(ctx context.Context, hub infrav1beta1.S
 	deploymentTemplate.Labels["app.kubernetes.io/name"] = "swagger-ui"
 	deploymentTemplate.Labels["swagger-hub-controller/hub"] = hub.Name
 
+	defaultSwaggerUIImage := "swaggerapi/swagger-ui:latest"
+	if r.DefaultSwaggerUIImage != "" {
+		defaultSwaggerUIImage = r.DefaultSwaggerUIImage
+	}
+
 	containers := []corev1.Container{
 		{
 			Name:  "swagger-ui",
-			Image: "swaggerapi/swagger-ui:latest",
+			Image: defaultSwaggerUIImage,
 			LivenessProbe: &corev1.Probe{
 				ProbeHandler: corev1.ProbeHandler{
 					HTTPGet: &corev1.HTTPGetAction{
