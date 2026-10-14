@@ -10,6 +10,13 @@ image:
   pullPolicy: IfNotPresent
   repository: ghcr.io/doodlescheduling/swagger-hub-controller
 
+# Default Swagger UI image used by managed SwaggerHub instances
+swaggerUI:
+  image:
+    registry: docker.io
+    repository: swaggerapi/swagger-ui
+    tag: latest
+
 imagePullSecrets: []
 
 livenessProbe:
