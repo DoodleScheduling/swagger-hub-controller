@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -293,19 +294,18 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 			}
 		}
 
-		for _, pathItem := range result.spec.Paths.Map() {
-			for _, op := range pathItem.Operations() {
-				op.Tags = []string{result.definition.Name}
-			}
-		}
-
 		for path, pathItem := range result.spec.Paths.Map() {
 			basePath := result.basePath
 			if basePath == "/" {
 				basePath = ""
 			}
+			if shouldPrefixDefinitionPaths(basePath, specification.Spec.Servers) {
+				path = joinPaths(basePath, path)
+			} else {
+				path = stripPathPrefix(path, basePath)
+			}
 
-			paths = append(paths, openapi3.WithPath(fmt.Sprintf("%s%s", basePath, path), pathItem))
+			paths = append(paths, openapi3.WithPath(path, pathItem))
 		}
 	}
 
@@ -316,6 +316,58 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 	}
 
 	return specification, schema, nil
+}
+
+func shouldPrefixDefinitionPaths(definitionBasePath string, specificationServers infrav1beta1.Servers) bool {
+	if definitionBasePath == "" {
+		return false
+	}
+
+	for _, server := range specificationServers {
+		parsed, err := url.Parse(server.URL)
+		if err != nil {
+			continue
+		}
+
+		serverBasePath := strings.TrimSuffix(parsed.Path, "/")
+		if serverBasePath == "" {
+			serverBasePath = "/"
+		}
+		if serverBasePath == definitionBasePath {
+			return false
+		}
+	}
+
+	return true
+}
+
+func joinPaths(prefix, path string) string {
+	if prefix == "" {
+		return path
+	}
+	prefix = strings.TrimSuffix(prefix, "/")
+	if path == prefix || strings.HasPrefix(path, prefix+"/") {
+		return path
+	}
+	if path == "/" {
+		return prefix
+	}
+	return prefix + "/" + strings.TrimPrefix(path, "/")
+}
+
+func stripPathPrefix(path, prefix string) string {
+	if prefix == "" || prefix == "/" {
+		return path
+	}
+
+	prefix = strings.TrimSuffix(prefix, "/")
+	if path == prefix {
+		return "/"
+	}
+	if strings.HasPrefix(path, prefix+"/") {
+		return strings.TrimPrefix(path, prefix)
+	}
+	return path
 }
 
 func prefixRefs(v interface{}, name string) {

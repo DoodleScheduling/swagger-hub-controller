@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"testing"
 	"time"
 
 	"github.com/DoodleScheduling/swagger-hub-controller/api/v1beta1"
@@ -160,3 +161,103 @@ var _ = Describe("SwaggerSpecification controller", func() {
 		})
 	})
 })
+
+func TestShouldPrefixDefinitionPaths(t *testing.T) {
+	tests := []struct {
+		name         string
+		basePath     string
+		servers      v1beta1.Servers
+		shouldPrefix bool
+	}{
+		{
+			name:     "matching relative server path",
+			basePath: "/api/example",
+			servers:  v1beta1.Servers{{URL: "/api/example"}},
+		},
+		{
+			name:     "matching absolute server path",
+			basePath: "/api/example",
+			servers:  v1beta1.Servers{{URL: "https://example.test/api/example"}},
+		},
+		{
+			name:         "different server path",
+			basePath:     "/api/example",
+			servers:      v1beta1.Servers{{URL: "/"}},
+			shouldPrefix: true,
+		},
+		{
+			name:         "no specification server",
+			basePath:     "/api/example",
+			shouldPrefix: true,
+		},
+		{
+			name:     "empty definition base path",
+			basePath: "",
+			servers:  v1beta1.Servers{{URL: "/root"}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := shouldPrefixDefinitionPaths(test.basePath, test.servers); got != test.shouldPrefix {
+				t.Fatalf("shouldPrefixDefinitionPaths() = %v, want %v", got, test.shouldPrefix)
+			}
+		})
+	}
+}
+
+func TestDefinitionPath(t *testing.T) {
+	servers := v1beta1.Servers{{URL: "/api/example"}}
+
+	tests := []struct {
+		name     string
+		path     string
+		basePath string
+		servers  v1beta1.Servers
+		want     string
+	}{
+		{
+			name:     "keeps a relative source path",
+			path:     "/widgets",
+			basePath: "/api/example",
+			servers:  servers,
+			want:     "/widgets",
+		},
+		{
+			name:     "strips an already prefixed source path",
+			path:     "/api/example/widgets",
+			basePath: "/api/example",
+			servers:  servers,
+			want:     "/widgets",
+		},
+		{
+			name:     "prefixes a global specification path",
+			path:     "/widgets",
+			basePath: "/api/example",
+			servers:  v1beta1.Servers{{URL: "/"}},
+			want:     "/api/example/widgets",
+		},
+		{
+			name:     "does not duplicate a global specification path",
+			path:     "/api/example/widgets",
+			basePath: "/api/example",
+			servers:  v1beta1.Servers{{URL: "/"}},
+			want:     "/api/example/widgets",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if !shouldPrefixDefinitionPaths(test.basePath, test.servers) {
+				if got := stripPathPrefix(test.path, test.basePath); got != test.want {
+					t.Fatalf("stripPathPrefix() = %q, want %q", got, test.want)
+				}
+				return
+			}
+
+			if got := joinPaths(test.basePath, test.path); got != test.want {
+				t.Fatalf("joinPaths() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
