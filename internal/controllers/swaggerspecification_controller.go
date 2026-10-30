@@ -178,6 +178,7 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 		schema.Servers = append(schema.Servers, &openapi3.Server{
 			URL:         srv.URL,
 			Description: srv.Description,
+			Variables:   copyServerVariables(srv.Variables),
 		})
 	}
 
@@ -307,6 +308,27 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 	}
 
 	return specification, schema, nil
+}
+
+func copyServerVariables(variables map[string]*infrav1beta1.ServerVariable) openapi3.ServerVariables {
+	if variables == nil {
+		return nil
+	}
+
+	result := make(openapi3.ServerVariables, len(variables))
+	for name, variable := range variables {
+		if variable == nil {
+			result[name] = nil
+			continue
+		}
+
+		result[name] = &openapi3.ServerVariable{
+			Enum:        slices.Clone(variable.Enum),
+			Default:     variable.Default,
+			Description: variable.Description,
+		}
+	}
+	return result
 }
 
 func definitionPath(path, definitionBasePath string, specificationServers infrav1beta1.Servers) string {

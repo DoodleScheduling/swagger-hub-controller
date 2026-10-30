@@ -288,3 +288,29 @@ func TestDefinitionPath(t *testing.T) {
 		})
 	}
 }
+
+func TestCopyServerVariables(t *testing.T) {
+	variables := map[string]*v1beta1.ServerVariable{
+		"base": {
+			Enum:        []string{"api", "v1"},
+			Default:     "api",
+			Description: "API base path",
+		},
+	}
+
+	got := copyServerVariables(variables)
+	variable := got["base"]
+	if variable == nil {
+		t.Fatal("copyServerVariables() dropped the base variable")
+	}
+	if variable.Default != "api" || variable.Description != "API base path" {
+		t.Fatalf("copyServerVariables() returned incorrect metadata: %#v", variable)
+	}
+	if len(variable.Enum) != 2 || variable.Enum[0] != "api" || variable.Enum[1] != "v1" {
+		t.Fatalf("copyServerVariables() returned incorrect enum: %#v", variable.Enum)
+	}
+	variable.Enum[0] = "changed"
+	if variables["base"].Enum[0] == "changed" {
+		t.Fatal("copyServerVariables() reused the source enum slice")
+	}
+}
