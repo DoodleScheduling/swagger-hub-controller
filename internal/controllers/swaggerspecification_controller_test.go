@@ -180,6 +180,21 @@ func TestShouldPrefixDefinitionPaths(t *testing.T) {
 			servers:  v1beta1.Servers{{URL: "https://example.test/api/example"}},
 		},
 		{
+			name:     "matching server variable default",
+			basePath: "/api/example",
+			servers: v1beta1.Servers{{
+				URL: "https://example.test/{base}/example",
+				Variables: map[string]*v1beta1.ServerVariable{
+					"base": {Default: "api"},
+				},
+			}},
+		},
+		{
+			name:     "matching trailing slash forms",
+			basePath: "/api/example/",
+			servers:  v1beta1.Servers{{URL: "/api/example"}},
+		},
+		{
 			name:         "different server path",
 			basePath:     "/api/example",
 			servers:      v1beta1.Servers{{URL: "/"}},
@@ -231,6 +246,25 @@ func TestDefinitionPath(t *testing.T) {
 			want:     "/widgets",
 		},
 		{
+			name:     "normalizes trailing slash in definition base path",
+			path:     "/api/example/widgets",
+			basePath: "/api/example/",
+			servers:  servers,
+			want:     "/widgets",
+		},
+		{
+			name:     "resolves server variable default",
+			path:     "/api/example/widgets",
+			basePath: "/api/example",
+			servers: v1beta1.Servers{{
+				URL: "https://example.test/{base}/example",
+				Variables: map[string]*v1beta1.ServerVariable{
+					"base": {Default: "api"},
+				},
+			}},
+			want: "/widgets",
+		},
+		{
 			name:     "prefixes a global specification path",
 			path:     "/widgets",
 			basePath: "/api/example",
@@ -248,15 +282,8 @@ func TestDefinitionPath(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if !shouldPrefixDefinitionPaths(test.basePath, test.servers) {
-				if got := stripPathPrefix(test.path, test.basePath); got != test.want {
-					t.Fatalf("stripPathPrefix() = %q, want %q", got, test.want)
-				}
-				return
-			}
-
-			if got := joinPaths(test.basePath, test.path); got != test.want {
-				t.Fatalf("joinPaths() = %q, want %q", got, test.want)
+			if got := definitionPath(test.path, test.basePath, test.servers); got != test.want {
+				t.Fatalf("definitionPath() = %q, want %q", got, test.want)
 			}
 		})
 	}

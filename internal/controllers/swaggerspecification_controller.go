@@ -295,17 +295,8 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 		}
 
 		for path, pathItem := range result.spec.Paths.Map() {
-			basePath := result.basePath
-			if basePath == "/" {
-				basePath = ""
-			}
-			if shouldPrefixDefinitionPaths(basePath, specification.Spec.Servers) {
-				path = joinPaths(basePath, path)
-			} else {
-				path = stripPathPrefix(path, basePath)
-			}
-
-			paths = append(paths, openapi3.WithPath(path, pathItem))
+			paths = append(paths, openapi3.WithPath(
+				definitionPath(path, result.basePath, specification.Spec.Servers), pathItem))
 		}
 	}
 
@@ -318,27 +309,47 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 	return specification, schema, nil
 }
 
+func definitionPath(path, definitionBasePath string, specificationServers infrav1beta1.Servers) string {
+	definitionBasePath = normalizeBasePath(definitionBasePath)
+	if shouldPrefixDefinitionPaths(definitionBasePath, specificationServers) {
+		return joinPaths(definitionBasePath, path)
+	}
+	return stripPathPrefix(path, definitionBasePath)
+}
+
 func shouldPrefixDefinitionPaths(definitionBasePath string, specificationServers infrav1beta1.Servers) bool {
 	if definitionBasePath == "" {
 		return false
 	}
+	definitionBasePath = normalizeBasePath(definitionBasePath)
 
 	for _, server := range specificationServers {
-		parsed, err := url.Parse(server.URL)
+		serverURL := server.URL
+		for name, variable := range server.Variables {
+			if variable != nil {
+				serverURL = strings.ReplaceAll(serverURL, "{"+name+"}", variable.Default)
+			}
+		}
+
+		parsed, err := url.Parse(serverURL)
 		if err != nil {
 			continue
 		}
 
-		serverBasePath := strings.TrimSuffix(parsed.Path, "/")
-		if serverBasePath == "" {
-			serverBasePath = "/"
-		}
+		serverBasePath := normalizeBasePath(parsed.Path)
 		if serverBasePath == definitionBasePath {
 			return false
 		}
 	}
 
 	return true
+}
+
+func normalizeBasePath(path string) string {
+	if path == "" || path == "/" {
+		return path
+	}
+	return "/" + strings.Trim(path, "/")
 }
 
 func joinPaths(prefix, path string) string {
