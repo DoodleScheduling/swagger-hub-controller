@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -177,6 +178,7 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 		schema.Servers = append(schema.Servers, &openapi3.Server{
 			URL:         srv.URL,
 			Description: srv.Description,
+			Variables:   copyServerVariables(srv.Variables),
 		})
 	}
 
@@ -293,19 +295,9 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 			}
 		}
 
-		for _, pathItem := range result.spec.Paths.Map() {
-			for _, op := range pathItem.Operations() {
-				op.Tags = []string{result.definition.Name}
-			}
-		}
-
 		for path, pathItem := range result.spec.Paths.Map() {
-			basePath := result.basePath
-			if basePath == "/" {
-				basePath = ""
-			}
-
-			paths = append(paths, openapi3.WithPath(fmt.Sprintf("%s%s", basePath, path), pathItem))
+			paths = append(paths, openapi3.WithPath(
+				definitionPath(path, result.basePath, specification.Spec.Servers), pathItem))
 		}
 	}
 
@@ -316,6 +308,99 @@ func (r *SwaggerSpecificationReconciler) generateOpenAPI(ctx context.Context, sp
 	}
 
 	return specification, schema, nil
+}
+
+func copyServerVariables(variables map[string]*infrav1beta1.ServerVariable) openapi3.ServerVariables {
+	if variables == nil {
+		return nil
+	}
+
+	result := make(openapi3.ServerVariables, len(variables))
+	for name, variable := range variables {
+		if variable == nil {
+			result[name] = nil
+			continue
+		}
+
+		result[name] = &openapi3.ServerVariable{
+			Enum:        slices.Clone(variable.Enum),
+			Default:     variable.Default,
+			Description: variable.Description,
+		}
+	}
+	return result
+}
+
+func definitionPath(path, definitionBasePath string, specificationServers infrav1beta1.Servers) string {
+	definitionBasePath = normalizeBasePath(definitionBasePath)
+	if shouldPrefixDefinitionPaths(definitionBasePath, specificationServers) {
+		return joinPaths(definitionBasePath, path)
+	}
+	return stripPathPrefix(path, definitionBasePath)
+}
+
+func shouldPrefixDefinitionPaths(definitionBasePath string, specificationServers infrav1beta1.Servers) bool {
+	if definitionBasePath == "" {
+		return false
+	}
+	definitionBasePath = normalizeBasePath(definitionBasePath)
+
+	for _, server := range specificationServers {
+		serverURL := server.URL
+		for name, variable := range server.Variables {
+			if variable != nil {
+				serverURL = strings.ReplaceAll(serverURL, "{"+name+"}", variable.Default)
+			}
+		}
+
+		parsed, err := url.Parse(serverURL)
+		if err != nil {
+			continue
+		}
+
+		serverBasePath := normalizeBasePath(parsed.Path)
+		if serverBasePath == definitionBasePath {
+			return false
+		}
+	}
+
+	return true
+}
+
+func normalizeBasePath(path string) string {
+	if path == "" || path == "/" {
+		return path
+	}
+	return "/" + strings.Trim(path, "/")
+}
+
+func joinPaths(prefix, path string) string {
+	if prefix == "" {
+		return path
+	}
+	prefix = strings.TrimSuffix(prefix, "/")
+	if path == prefix || strings.HasPrefix(path, prefix+"/") {
+		return path
+	}
+	if path == "/" {
+		return prefix
+	}
+	return prefix + "/" + strings.TrimPrefix(path, "/")
+}
+
+func stripPathPrefix(path, prefix string) string {
+	if prefix == "" || prefix == "/" {
+		return path
+	}
+
+	prefix = strings.TrimSuffix(prefix, "/")
+	if path == prefix {
+		return "/"
+	}
+	if strings.HasPrefix(path, prefix+"/") {
+		return strings.TrimPrefix(path, prefix)
+	}
+	return path
 }
 
 func prefixRefs(v interface{}, name string) {

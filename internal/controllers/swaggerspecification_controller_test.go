@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"testing"
 	"time"
 
 	"github.com/DoodleScheduling/swagger-hub-controller/api/v1beta1"
@@ -160,3 +161,156 @@ var _ = Describe("SwaggerSpecification controller", func() {
 		})
 	})
 })
+
+func TestShouldPrefixDefinitionPaths(t *testing.T) {
+	tests := []struct {
+		name         string
+		basePath     string
+		servers      v1beta1.Servers
+		shouldPrefix bool
+	}{
+		{
+			name:     "matching relative server path",
+			basePath: "/api/example",
+			servers:  v1beta1.Servers{{URL: "/api/example"}},
+		},
+		{
+			name:     "matching absolute server path",
+			basePath: "/api/example",
+			servers:  v1beta1.Servers{{URL: "https://example.test/api/example"}},
+		},
+		{
+			name:     "matching server variable default",
+			basePath: "/api/example",
+			servers: v1beta1.Servers{{
+				URL: "https://example.test/{base}/example",
+				Variables: map[string]*v1beta1.ServerVariable{
+					"base": {Default: "api"},
+				},
+			}},
+		},
+		{
+			name:     "matching trailing slash forms",
+			basePath: "/api/example/",
+			servers:  v1beta1.Servers{{URL: "/api/example"}},
+		},
+		{
+			name:         "different server path",
+			basePath:     "/api/example",
+			servers:      v1beta1.Servers{{URL: "/"}},
+			shouldPrefix: true,
+		},
+		{
+			name:         "no specification server",
+			basePath:     "/api/example",
+			shouldPrefix: true,
+		},
+		{
+			name:     "empty definition base path",
+			basePath: "",
+			servers:  v1beta1.Servers{{URL: "/root"}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := shouldPrefixDefinitionPaths(test.basePath, test.servers); got != test.shouldPrefix {
+				t.Fatalf("shouldPrefixDefinitionPaths() = %v, want %v", got, test.shouldPrefix)
+			}
+		})
+	}
+}
+
+func TestDefinitionPath(t *testing.T) {
+	servers := v1beta1.Servers{{URL: "/api/example"}}
+
+	tests := []struct {
+		name     string
+		path     string
+		basePath string
+		servers  v1beta1.Servers
+		want     string
+	}{
+		{
+			name:     "keeps a relative source path",
+			path:     "/widgets",
+			basePath: "/api/example",
+			servers:  servers,
+			want:     "/widgets",
+		},
+		{
+			name:     "strips an already prefixed source path",
+			path:     "/api/example/widgets",
+			basePath: "/api/example",
+			servers:  servers,
+			want:     "/widgets",
+		},
+		{
+			name:     "normalizes trailing slash in definition base path",
+			path:     "/api/example/widgets",
+			basePath: "/api/example/",
+			servers:  servers,
+			want:     "/widgets",
+		},
+		{
+			name:     "resolves server variable default",
+			path:     "/api/example/widgets",
+			basePath: "/api/example",
+			servers: v1beta1.Servers{{
+				URL: "https://example.test/{base}/example",
+				Variables: map[string]*v1beta1.ServerVariable{
+					"base": {Default: "api"},
+				},
+			}},
+			want: "/widgets",
+		},
+		{
+			name:     "prefixes a global specification path",
+			path:     "/widgets",
+			basePath: "/api/example",
+			servers:  v1beta1.Servers{{URL: "/"}},
+			want:     "/api/example/widgets",
+		},
+		{
+			name:     "does not duplicate a global specification path",
+			path:     "/api/example/widgets",
+			basePath: "/api/example",
+			servers:  v1beta1.Servers{{URL: "/"}},
+			want:     "/api/example/widgets",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := definitionPath(test.path, test.basePath, test.servers); got != test.want {
+				t.Fatalf("definitionPath() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestCopyServerVariables(t *testing.T) {
+	variables := map[string]*v1beta1.ServerVariable{
+		"base": {
+			Enum:        []string{"api", "v1"},
+			Default:     "api",
+			Description: "API base path",
+		},
+	}
+
+	got := copyServerVariables(variables)
+	variable := got["base"]
+	if variable == nil {
+		t.Fatal("copyServerVariables() dropped the base variable")
+	}
+	if variable.Default != "api" || variable.Description != "API base path" {
+		t.Fatalf("copyServerVariables() returned incorrect metadata: %#v", variable)
+	}
+	if len(variable.Enum) != 2 || variable.Enum[0] != "api" || variable.Enum[1] != "v1" {
+		t.Fatalf("copyServerVariables() returned incorrect enum: %#v", variable.Enum)
+	}
+	variable.Enum[0] = "changed"
+	if variables["base"].Enum[0] == "changed" {
+		t.Fatal("copyServerVariables() reused the source enum slice")
+	}
+}
